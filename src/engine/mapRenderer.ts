@@ -333,6 +333,7 @@ export function renderMap(
   gridConfig: GridConfig = DEFAULT_GRID_CONFIG,
   tileOverrides: TileOverrides = {},
   tileEditMode = false,
+  showObstacles = true,
 ) {
   const { grid, waypoints } = level;
   const flowMap = buildFlowMap(waypoints);
@@ -358,11 +359,13 @@ export function renderMap(
   // ── Layer 2: perspective grid lines ──────────────────────────────────────
   drawGridLines(ctx, h);
 
-  // ── Layer 3: obstacle tiles ───────────────────────────────────────────────
-  for (let row = 0; row < GRID_ROWS; row++) {
-    for (let col = 0; col < GRID_COLS; col++) {
-      if (tileType(col, row) === 'obstacle') {
-        drawObstacleTile(ctx, col, row, h);
+  // ── Layer 3: obstacle tiles (when visible) ───────────────────────────────
+  if (showObstacles || tileEditMode) {
+    for (let row = 0; row < GRID_ROWS; row++) {
+      for (let col = 0; col < GRID_COLS; col++) {
+        if (tileType(col, row) === 'obstacle') {
+          drawObstacleTile(ctx, col, row, h);
+        }
       }
     }
   }

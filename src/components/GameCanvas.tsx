@@ -14,9 +14,10 @@ interface Props {
   tileOverrides?: TileOverrides;
   tileEditMode?: boolean;
   onToggleTile?: (col: number, row: number) => void;
+  showObstacles?: boolean;
 }
 
-export function GameCanvas({ selectedTower, towers, onPlaceTower, gridConfig, tileOverrides, tileEditMode, onToggleTile }: Props) {
+export function GameCanvas({ selectedTower, towers, onPlaceTower, gridConfig, tileOverrides, tileEditMode, onToggleTile, showObstacles }: Props) {
   const canvasRef        = useRef<HTMLCanvasElement>(null);
   const bgImageRef       = useRef<HTMLImageElement | null>(null);
   const hoveredRef       = useRef<HoveredTile | null>(null);
@@ -27,6 +28,7 @@ export function GameCanvas({ selectedTower, towers, onPlaceTower, gridConfig, ti
   const tileOverridesRef = useRef<TileOverrides>(tileOverrides ?? {});
   const tileEditModeRef  = useRef(tileEditMode ?? false);
   const onToggleTileRef  = useRef(onToggleTile);
+  const showObstaclesRef = useRef(showObstacles ?? true);
 
   // Keep refs in sync with latest props — no stale closures in canvas callbacks
   selectedTowerRef.current  = selectedTower;
@@ -36,6 +38,7 @@ export function GameCanvas({ selectedTower, towers, onPlaceTower, gridConfig, ti
   tileOverridesRef.current  = tileOverrides ?? {};
   tileEditModeRef.current   = tileEditMode ?? false;
   onToggleTileRef.current   = onToggleTile;
+  showObstaclesRef.current  = showObstacles ?? true;
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -45,7 +48,8 @@ export function GameCanvas({ selectedTower, towers, onPlaceTower, gridConfig, ti
     renderMap(
       ctx, LEVEL1, bgImageRef.current,
       hoveredRef.current, towersRef.current,
-      gridConfigRef.current, tileOverridesRef.current, tileEditModeRef.current,
+      gridConfigRef.current, tileOverridesRef.current,
+      tileEditModeRef.current, showObstaclesRef.current,
     );
   }, []);
 
@@ -56,8 +60,8 @@ export function GameCanvas({ selectedTower, towers, onPlaceTower, gridConfig, ti
     img.src = MAP_BG_SRC;
   }, [redraw]);
 
-  // Redraw when towers, gridConfig, overrides, or edit mode change
-  useEffect(() => { redraw(); }, [towers, gridConfig, tileOverrides, tileEditMode, redraw]);
+  // Redraw when relevant props change
+  useEffect(() => { redraw(); }, [towers, gridConfig, tileOverrides, tileEditMode, showObstacles, redraw]);
 
   /** Convert a mouse event to grid (col, row) using the perspective hit-test. */
   const tileAt = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {

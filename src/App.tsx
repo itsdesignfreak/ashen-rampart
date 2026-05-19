@@ -25,8 +25,9 @@ export default function App() {
   const [showDebug,       setShowDebug]       = useState(false);
   const [gridConfig,      setGridConfig]      = useState<GridConfig>(DEFAULT_GRID_CONFIG);
   const [savedGridConfig, setSavedGridConfig] = useState<GridConfig>(DEFAULT_GRID_CONFIG);
-  const [showTileEditor,  setShowTileEditor]  = useState(false);
-  const [tileOverrides,   setTileOverrides]   = useState<TileOverrides>({});
+  const [showTileEditor,    setShowTileEditor]    = useState(false);
+  const [tileOverrides,     setTileOverrides]     = useState<TileOverrides>({});
+  const [showObstacles,     setShowObstacles]     = useState(true);
 
   const handleSelectTower = (type: TowerType) => {
     setSelectedTower(prev => prev === type ? null : type);
@@ -83,6 +84,17 @@ export default function App() {
           >
             🖌️ Tiles
           </button>
+          <button
+            onClick={() => setShowObstacles(v => !v)}
+            className={[
+              'text-xs px-2 py-1 rounded border transition-colors',
+              showObstacles
+                ? 'bg-stone-700 border-stone-500 text-white'
+                : 'bg-stone-800 border-stone-600 text-stone-500 hover:text-white',
+            ].join(' ')}
+          >
+            {showObstacles ? '🚫 Hide Blocked' : '🚫 Show Blocked'}
+          </button>
         </div>
       </header>
 
@@ -110,6 +122,7 @@ export default function App() {
             tileOverrides={tileOverrides}
             tileEditMode={showTileEditor}
             onToggleTile={handleToggleTile}
+            showObstacles={showObstacles}
           />
         </div>
 
