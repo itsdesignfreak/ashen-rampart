@@ -1,23 +1,16 @@
 import type { LevelData, TileType } from '../types';
 import { GRID_COLS, GRID_ROWS } from '../constants';
 
-// Waypoints for 20×15 grid — entrance shifted to col 7 to follow the stone road
+// Waypoints for 20×15 grid
 export const WAYPOINTS = [
   { col: 10, row:  0 },  // Enemy Entrance (stone road, top)
   { col: 10, row:  6 },  // turn east
   { col: 13, row:  6 },  // turn south
   { col: 13, row:  9 },  // turn west
-  { col:  6, row:  9 },  // turn south
-  { col:  6, row: 12 },  // turn west
+  { col:  7, row:  9 },  // turn south
+  { col:  7, row: 12 },  // turn west
   { col:  5, row: 12 },  // Base
 ] as const;
-
-// Building footprints for 20×15 grid: [colStart, rowStart, colEnd, rowEnd]
-const OBSTACLE_RECTS: [number, number, number, number][] = [
-  [ 0,  0,  4,  2],  // top-left building (blacksmith)
-  [15,  0, 18,  2],  // top-right building (shop)
-  [ 0,  4,  4,  7],  // centre-left building
-];
 
 function buildGrid(): TileType[][] {
   const grid: TileType[][] = Array.from({ length: GRID_ROWS }, () =>
@@ -39,13 +32,26 @@ function buildGrid(): TileType[][] {
     }
   }
 
-  // Mark obstacles (never overwrite path tiles)
-  for (const [c0, r0, c1, r1] of OBSTACLE_RECTS) {
-    for (let r = r0; r <= r1; r++) {
-      for (let c = c0; c <= c1; c++) {
-        if (grid[r][c] !== 'path') grid[r][c] = 'obstacle';
-      }
-    }
+  // Manually painted obstacle tiles (never overwrite path)
+  const OBSTACLES: [number, number][] = [ // [row, col]
+    [0,5],[0,6],[0,7],[0,8],[0,9],[0,11],[0,12],[0,13],[0,14],
+    [1,5],[1,6],[1,7],[1,8],[1,9],[1,11],[1,12],[1,13],[1,14],
+    [2,11],[2,14],
+    [3,6],[3,7],[3,12],
+    [4,5],[4,6],[4,7],[4,8],[4,12],[4,13],[4,14],[4,15],[4,16],[4,17],
+    [5,5],[5,6],[5,7],[5,8],[5,17],[5,18],[5,19],
+    [6,4],[6,5],[6,6],[6,18],[6,19],
+    [7,5],[7,6],[7,7],[7,19],
+    [8,5],[8,6],[8,7],[8,10],[8,19],
+    [9,16],[9,18],
+    [10,14],[10,18],
+    [11,3],[11,4],[11,5],[11,6],[11,17],[11,18],
+    [12,4],[12,10],[12,11],[12,12],[12,13],[12,14],[12,15],[12,16],[12,17],[12,18],
+    [13,4],[13,5],[13,10],[13,11],[13,12],[13,13],[13,14],[13,15],[13,16],[13,17],[13,18],
+    [14,10],[14,11],[14,12],[14,13],[14,14],[14,15],[14,16],[14,17],[14,18],
+  ];
+  for (const [r, c] of OBSTACLES) {
+    if (grid[r]?.[c] !== 'path') grid[r][c] = 'obstacle';
   }
 
   return grid;

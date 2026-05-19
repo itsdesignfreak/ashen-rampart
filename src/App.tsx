@@ -1,13 +1,15 @@
 import { useState, useCallback } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import { GridDebugPanel } from './components/GridDebugPanel';
+import { TileEditorPanel } from './components/TileEditorPanel';
 import {
   STARTING_GOLD, LIVES_START,
   TOWER_COST_ARROW, TOWER_COST_CANNON,
 } from './constants';
-import type { Tower, TowerType } from './types';
+import type { Tower, TowerType, TileOverrides } from './types';
 import { DEFAULT_GRID_CONFIG } from './engine/mapRenderer';
 import type { GridConfig } from './engine/mapRenderer';
+import { LEVEL1 } from './data/level1';
 
 const TOWER_COST: Record<TowerType, number> = {
   arrow:  TOWER_COST_ARROW,
@@ -23,6 +25,8 @@ export default function App() {
   const [showDebug,       setShowDebug]       = useState(false);
   const [gridConfig,      setGridConfig]      = useState<GridConfig>(DEFAULT_GRID_CONFIG);
   const [savedGridConfig, setSavedGridConfig] = useState<GridConfig>(DEFAULT_GRID_CONFIG);
+  const [showTileEditor,  setShowTileEditor]  = useState(false);
+  const [tileOverrides,   setTileOverrides]   = useState<TileOverrides>({});
 
   const handleSelectTower = (type: TowerType) => {
     setSelectedTower(prev => prev === type ? null : type);
@@ -38,8 +42,17 @@ export default function App() {
 
   const canAfford = (type: TowerType) => gold >= TOWER_COST[type];
 
+  const handleToggleTile = useCallback((col: number, row: number) => {
+    const key = `${col},${row}`;
+    const current = tileOverrides[key] ?? LEVEL1.grid[row][col];
+    setTileOverrides(prev => ({
+      ...prev,
+      [key]: current === 'obstacle' ? 'grass' : 'obstacle',
+    }));
+  }, [tileOverrides]);
+
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col">
+    <div className="h-screen bg-stone-950 text-stone-100 flex flex-col overflow-hidden">
       <header className="flex items-center justify-between px-6 py-3 bg-stone-900 border-b border-stone-700">
         <h1 className="text-xl font-bold tracking-widest uppercase text-amber-400">
           Ashen Rampart
@@ -59,6 +72,17 @@ export default function App() {
           >
             🔧 Grid
           </button>
+          <button
+            onClick={() => setShowTileEditor(v => !v)}
+            className={[
+              'text-xs px-2 py-1 rounded border transition-colors',
+              showTileEditor
+                ? 'bg-red-900 border-red-600 text-white'
+                : 'bg-stone-800 border-stone-600 text-stone-400 hover:text-white',
+            ].join(' ')}
+          >
+            🖌️ Tiles
+          </button>
         </div>
       </header>
 
@@ -71,12 +95,21 @@ export default function App() {
             onSave={() => setSavedGridConfig(gridConfig)}
           />
         )}
-        <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+        {showTileEditor && (
+          <TileEditorPanel
+            overrides={tileOverrides}
+            onClear={() => setTileOverrides({})}
+          />
+        )}
+        <div className="flex-1 min-h-0 flex items-center justify-center p-2 overflow-hidden">
           <GameCanvas
             selectedTower={selectedTower}
             towers={towers}
             onPlaceTower={handlePlaceTower}
             gridConfig={gridConfig}
+            tileOverrides={tileOverrides}
+            tileEditMode={showTileEditor}
+            onToggleTile={handleToggleTile}
           />
         </div>
 

@@ -1,4 +1,4 @@
-import type { Direction, LevelData, Tower, TowerType, Waypoint } from '../types';
+import type { Direction, LevelData, Tower, TowerType, TileOverrides, Waypoint } from '../types';
 import {
   TILE_W, TILE_H, CANVAS_WIDTH, CANVAS_HEIGHT,
   GRID_COLS, GRID_ROWS, GRID_PERSPECTIVE_MAX_DEG,
@@ -143,10 +143,14 @@ export function perspHitTest(
 
 // ── Drawing helpers ───────────────────────────────────────────────────────────
 
-const ARROW_COLOR  = 'rgba(255,255,255,0.55)';
-const HOVER_FILL   = 'rgba(180,230,120,0.35)';
-const HOVER_STROKE = 'rgba(200,255,140,0.90)';
-const GRID_LINE    = 'rgba(255,255,255,0.10)';
+const ARROW_COLOR    = 'rgba(255,255,255,0.55)';
+const HOVER_FILL     = 'rgba(180,230,120,0.35)';
+const HOVER_STROKE   = 'rgba(200,255,140,0.90)';
+const GRID_LINE      = 'rgba(255,255,255,0.10)';
+const OBSTACLE_FILL  = 'rgba(120,30,30,0.55)';
+const OBSTACLE_CROSS = 'rgba(220,80,80,0.70)';
+const TILE_EDIT_FILL   = 'rgba(220,80,80,0.25)';
+const TILE_EDIT_STROKE = 'rgba(240,100,100,0.90)';
 
 function buildFlowMap(waypoints: Waypoint[]): Map<string, Direction> {
   const map = new Map<string, Direction>();
@@ -263,6 +267,29 @@ function drawLabel(ctx: CanvasRenderingContext2D, cx: number, cy: number, text: 
   ctx.fillText(text, cx, cy);
 }
 
+/** Draw a red-tinted blocked overlay on an obstacle tile. */
+function drawObstacleTile(
+  ctx: CanvasRenderingContext2D,
+  col: number, row: number,
+  h: ReturnType<typeof makeHelpers>,
+) {
+  const [tl, tr, br, bl] = h.tileScreenCorners(col, row);
+  const [cx, cy] = h.perspCenter(col, row);
+
+  ctx.fillStyle = OBSTACLE_FILL;
+  ctx.beginPath();
+  traceRoundedQuad(ctx, tl, tr, br, bl, h.radius);
+  ctx.fill();
+
+  // X cross
+  ctx.strokeStyle = OBSTACLE_CROSS;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(tl[0], tl[1]); ctx.lineTo(br[0], br[1]);
+  ctx.moveTo(tr[0], tr[1]); ctx.lineTo(bl[0], bl[1]);
+  ctx.stroke();
+}
+
 function drawTowerPlaceholder(
   ctx: CanvasRenderingContext2D,
   col: number,
@@ -304,10 +331,16 @@ export function renderMap(
   hoveredTile: HoveredTile | null = null,
   towers: Tower[] = [],
   gridConfig: GridConfig = DEFAULT_GRID_CONFIG,
+  tileOverrides: TileOverrides = {},
+  tileEditMode = false,
 ) {
   const { grid, waypoints } = level;
   const flowMap = buildFlowMap(waypoints);
   const h = makeHelpers(gridConfig);
+
+  /** Effective tile type after applying overrides. */
+  const tileType = (col: number, row: number) =>
+    tileOverrides[`${col},${row}`] ?? grid[row]?.[col] ?? 'grass';
 
   // ── Layer 1: background image ─────────────────────────────────────────────
   if (bgImage) {
@@ -325,17 +358,32 @@ export function renderMap(
   // ── Layer 2: perspective grid lines ──────────────────────────────────────
   drawGridLines(ctx, h);
 
-  // ── Layer 3: hover highlight (grass tiles only) ───────────────────────────
+  // ── Layer 3: obstacle tiles ───────────────────────────────────────────────
+  for (let row = 0; row < GRID_ROWS; row++) {
+    for (let col = 0; col < GRID_COLS; col++) {
+      if (tileType(col, row) === 'obstacle') {
+        drawObstacleTile(ctx, col, row, h);
+      }
+    }
+  }
+
+  // ── Layer 4: hover highlight ──────────────────────────────────────────────
   if (hoveredTile) {
     const { col, row } = hoveredTile;
-    if (grid[row]?.[col] === 'grass') {
+    const type = tileType(col, row);
+    const canInteract = tileEditMode ? type !== 'path' : type === 'grass';
+
+    if (canInteract) {
       const [tl, tr, br, bl] = h.tileScreenCorners(col, row);
-      ctx.fillStyle = HOVER_FILL;
+      const fill   = tileEditMode ? TILE_EDIT_FILL   : HOVER_FILL;
+      const stroke = tileEditMode ? TILE_EDIT_STROKE : HOVER_STROKE;
+
+      ctx.fillStyle = fill;
       ctx.beginPath();
       traceRoundedQuad(ctx, tl, tr, br, bl, h.radius);
       ctx.fill();
 
-      ctx.strokeStyle = HOVER_STROKE;
+      ctx.strokeStyle = stroke;
       ctx.lineWidth = 2;
       ctx.beginPath();
       traceRoundedQuad(ctx, tl, tr, br, bl, h.radius);
@@ -343,14 +391,14 @@ export function renderMap(
     }
   }
 
-  // ── Layer 4: path direction arrows ────────────────────────────────────────
+  // ── Layer 5: path direction arrows ────────────────────────────────────────
   for (const [key, dir] of flowMap) {
     const [c, r] = key.split(',').map(Number);
     const [cx, cy] = h.perspCenter(c, r);
     drawArrow(ctx, cx, cy, dir);
   }
 
-  // ── Layer 5: entrance / base labels ──────────────────────────────────────
+  // ── Layer 6: entrance / base labels ──────────────────────────────────────
   const entry = waypoints[0];
   const base  = waypoints[waypoints.length - 1];
   const [eCx, eCy] = h.perspCenter(entry.col, entry.row);
@@ -358,7 +406,7 @@ export function renderMap(
   drawLabel(ctx, eCx, eCy, 'ENTRANCE');
   drawLabel(ctx, bCx, bCy, 'BASE');
 
-  // ── Layer 6: placed towers ────────────────────────────────────────────────
+  // ── Layer 7: placed towers ────────────────────────────────────────────────
   for (const tower of towers) {
     drawTowerPlaceholder(ctx, tower.col, tower.row, tower.type, h);
   }

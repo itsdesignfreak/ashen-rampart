@@ -3,7 +3,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, MAP_BG_SRC } from '../constants';
 import { renderMap, perspHitTest } from '../engine/mapRenderer';
 import type { HoveredTile, GridConfig } from '../engine/mapRenderer';
 import { DEFAULT_GRID_CONFIG } from '../engine/mapRenderer';
-import type { Tower, TowerType } from '../types';
+import type { Tower, TowerType, TileOverrides } from '../types';
 import { LEVEL1 } from '../data/level1';
 
 interface Props {
@@ -11,9 +11,12 @@ interface Props {
   towers: Tower[];
   onPlaceTower: (col: number, row: number) => void;
   gridConfig?: GridConfig;
+  tileOverrides?: TileOverrides;
+  tileEditMode?: boolean;
+  onToggleTile?: (col: number, row: number) => void;
 }
 
-export function GameCanvas({ selectedTower, towers, onPlaceTower, gridConfig }: Props) {
+export function GameCanvas({ selectedTower, towers, onPlaceTower, gridConfig, tileOverrides, tileEditMode, onToggleTile }: Props) {
   const canvasRef        = useRef<HTMLCanvasElement>(null);
   const bgImageRef       = useRef<HTMLImageElement | null>(null);
   const hoveredRef       = useRef<HoveredTile | null>(null);
@@ -21,19 +24,29 @@ export function GameCanvas({ selectedTower, towers, onPlaceTower, gridConfig }: 
   const towersRef        = useRef<Tower[]>([]);
   const onPlaceTowerRef  = useRef(onPlaceTower);
   const gridConfigRef    = useRef<GridConfig>(gridConfig ?? DEFAULT_GRID_CONFIG);
+  const tileOverridesRef = useRef<TileOverrides>(tileOverrides ?? {});
+  const tileEditModeRef  = useRef(tileEditMode ?? false);
+  const onToggleTileRef  = useRef(onToggleTile);
 
   // Keep refs in sync with latest props — no stale closures in canvas callbacks
-  selectedTowerRef.current = selectedTower;
-  towersRef.current        = towers;
-  onPlaceTowerRef.current  = onPlaceTower;
-  gridConfigRef.current    = gridConfig ?? DEFAULT_GRID_CONFIG;
+  selectedTowerRef.current  = selectedTower;
+  towersRef.current         = towers;
+  onPlaceTowerRef.current   = onPlaceTower;
+  gridConfigRef.current     = gridConfig ?? DEFAULT_GRID_CONFIG;
+  tileOverridesRef.current  = tileOverrides ?? {};
+  tileEditModeRef.current   = tileEditMode ?? false;
+  onToggleTileRef.current   = onToggleTile;
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    renderMap(ctx, LEVEL1, bgImageRef.current, hoveredRef.current, towersRef.current, gridConfigRef.current);
+    renderMap(
+      ctx, LEVEL1, bgImageRef.current,
+      hoveredRef.current, towersRef.current,
+      gridConfigRef.current, tileOverridesRef.current, tileEditModeRef.current,
+    );
   }, []);
 
   useEffect(() => {
@@ -43,8 +56,8 @@ export function GameCanvas({ selectedTower, towers, onPlaceTower, gridConfig }: 
     img.src = MAP_BG_SRC;
   }, [redraw]);
 
-  // Redraw when towers or gridConfig change
-  useEffect(() => { redraw(); }, [towers, gridConfig, redraw]);
+  // Redraw when towers, gridConfig, overrides, or edit mode change
+  useEffect(() => { redraw(); }, [towers, gridConfig, tileOverrides, tileEditMode, redraw]);
 
   /** Convert a mouse event to grid (col, row) using the perspective hit-test. */
   const tileAt = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -78,10 +91,14 @@ export function GameCanvas({ selectedTower, towers, onPlaceTower, gridConfig }: 
 
     hoveredRef.current = { col, row };
 
-    const isGrass  = LEVEL1.grid[row][col] === 'grass';
-    const hasTower = towersRef.current.some(t => t.col === col && t.row === row);
-    const canPlace = isGrass && !hasTower && selectedTowerRef.current !== null;
-    canvas.style.cursor = canPlace ? 'pointer' : 'default';
+    const effectiveType = tileOverridesRef.current[`${col},${row}`] ?? LEVEL1.grid[row][col];
+    if (tileEditModeRef.current) {
+      canvas.style.cursor = effectiveType !== 'path' ? 'crosshair' : 'default';
+    } else {
+      const hasTower = towersRef.current.some(t => t.col === col && t.row === row);
+      const canPlace = effectiveType === 'grass' && !hasTower && selectedTowerRef.current !== null;
+      canvas.style.cursor = canPlace ? 'pointer' : 'default';
+    }
 
     redraw();
   }, [tileAt, redraw]);
@@ -97,8 +114,16 @@ export function GameCanvas({ selectedTower, towers, onPlaceTower, gridConfig }: 
     const tile = tileAt(e);
     if (!tile) return;
     const { col, row } = tile;
+
+    if (tileEditModeRef.current) {
+      const effectiveType = tileOverridesRef.current[`${col},${row}`] ?? LEVEL1.grid[row][col];
+      if (effectiveType !== 'path') onToggleTileRef.current?.(col, row);
+      return;
+    }
+
     if (!selectedTowerRef.current) return;
-    if (LEVEL1.grid[row][col] !== 'grass') return;
+    const effectiveType = tileOverridesRef.current[`${col},${row}`] ?? LEVEL1.grid[row][col];
+    if (effectiveType !== 'grass') return;
     if (towersRef.current.some(t => t.col === col && t.row === row)) return;
     onPlaceTowerRef.current(col, row);
   }, [tileAt]);
@@ -109,6 +134,7 @@ export function GameCanvas({ selectedTower, towers, onPlaceTower, gridConfig }: 
       width={CANVAS_WIDTH}
       height={CANVAS_HEIGHT}
       className="block border border-stone-700"
+      style={{ maxWidth: '100%', maxHeight: '100%' }}
       aria-label="Ashen Rampart game canvas"
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
