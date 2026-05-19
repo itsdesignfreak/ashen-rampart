@@ -9,12 +9,16 @@ export const CANVAS_WIDTH  = 1448;
 export const CANVAS_HEIGHT = 1086;
 
 // Towers
-export const TOWER_COST_ARROW = 50;
-export const TOWER_COST_CANNON = 100;
-export const TOWER_RANGE_ARROW = 3; // tiles
-export const TOWER_RANGE_CANNON = 2;
-export const TOWER_FIRE_RATE_ARROW = 1000; // ms between shots
+export const TOWER_COST_ARROW    = 50;
+export const TOWER_COST_MAGE     = 75;
+export const TOWER_COST_CANNON   = 100;
+export const TOWER_RANGE_ARROW   = 5;    // tiles
+export const TOWER_RANGE_MAGE    = 3;
+export const TOWER_RANGE_CANNON  = 2;
+export const TOWER_FIRE_RATE_ARROW  = 1000; // ms between shots
+export const TOWER_FIRE_RATE_MAGE   = 2000;
 export const TOWER_FIRE_RATE_CANNON = 2500;
+export const TOWER_SELL_REFUND = 0.5;   // fraction of cost returned on sell
 
 // Enemies
 export const ENEMY_SPEED_BASE = 1; // tiles per second

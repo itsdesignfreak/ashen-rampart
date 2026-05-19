@@ -1,6 +1,7 @@
 import type { Direction, LevelData, Tower, TowerType, TileOverrides, Waypoint } from '../types';
 import type { Enemy } from './enemy';
 import { enemyGridPos } from './enemy';
+import { TOWER_STATS } from './towerData';
 import {
   TILE_W, TILE_H, CANVAS_WIDTH, CANVAS_HEIGHT,
   GRID_COLS, GRID_ROWS, GRID_PERSPECTIVE_MAX_DEG,
@@ -160,6 +161,7 @@ const OBSTACLE_FILL  = 'rgba(120,30,30,0.55)';
 const OBSTACLE_CROSS = 'rgba(220,80,80,0.70)';
 const TILE_EDIT_FILL   = 'rgba(220,80,80,0.25)';
 const TILE_EDIT_STROKE = 'rgba(240,100,100,0.90)';
+const SELL_STROKE      = 'rgba(239,68,68,0.90)';
 
 function buildFlowMap(waypoints: Waypoint[]): Map<string, Direction> {
   const map = new Map<string, Direction>();
@@ -299,21 +301,75 @@ function drawObstacleTile(
   ctx.stroke();
 }
 
-function drawTowerPlaceholder(
-  ctx: CanvasRenderingContext2D,
-  col: number,
-  row: number,
-  type: TowerType,
-  h: ReturnType<typeof makeHelpers>,
+/**
+ * Draw a perspective-correct range ring around tile (col, row).
+ * Uses perspPoint to trace a circle of radius `range` tiles in grid-space.
+ */
+function drawRangeRing(
+  ctx:         CanvasRenderingContext2D,
+  col:         number,
+  row:         number,
+  range:       number,
+  fillStyle:   string,
+  strokeStyle: string,
+  h:           ReturnType<typeof makeHelpers>,
+  steps =      72,
 ) {
+  const cx = col + 0.5;
+  const cy = row + 0.5;
+
+  ctx.save();
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const angle = (i / steps) * Math.PI * 2;
+    const gx = cx + Math.cos(angle) * range;
+    const gy = cy + Math.sin(angle) * range;
+    const [sx, sy] = h.perspPoint(gx, gy);
+    if (i === 0) ctx.moveTo(sx, sy);
+    else         ctx.lineTo(sx, sy);
+  }
+  ctx.closePath();
+
+  ctx.fillStyle = fillStyle;
+  ctx.fill();
+
+  ctx.strokeStyle = strokeStyle;
+  ctx.lineWidth   = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+const TOWER_W = 64;   // sprite width  (px)
+const TOWER_H = 184;  // sprite height (px) — bottom-anchored at tile perspCenter (like enemies)
+
+function drawTowerPlaceholder(
+  ctx:  CanvasRenderingContext2D,
+  col:  number,
+  row:  number,
+  type: TowerType,
+  h:    ReturnType<typeof makeHelpers>,
+  img?: HTMLImageElement,
+) {
+  const [cx, cy] = h.perspCenter(col, row);
+
+  if (img) {
+    // Bottom of sprite sits slightly below the tile's perspective centre
+    ctx.drawImage(img, cx - TOWER_W / 2, cy - TOWER_H + 20, TOWER_W, TOWER_H);
+    return;
+  }
+
+  // ── Placeholder (shown until sprite is provided) ──────────────────────────
+  const stats = TOWER_STATS[type];
   const [tl, tr, br, bl] = h.tileScreenCorners(col, row);
+
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.beginPath();
   traceRoundedQuad(ctx, tl, tr, br, bl, h.radius);
   ctx.fill();
 
-  const [cx, cy] = h.perspCenter(col, row);
-  ctx.fillStyle = type === 'arrow' ? '#60a5fa' : '#f97316';
+  ctx.fillStyle = stats.color;
   ctx.beginPath();
   ctx.arc(cx, cy - 5, 16, 0, Math.PI * 2);
   ctx.fill();
@@ -322,16 +378,19 @@ function drawTowerPlaceholder(
   ctx.font = 'bold 13px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(type === 'arrow' ? 'A' : 'C', cx, cy - 5);
+  ctx.fillText(stats.abbrev, cx, cy - 5);
 
   ctx.fillStyle = 'rgba(255,255,255,0.65)';
   ctx.font = '8px monospace';
-  ctx.fillText(type === 'arrow' ? 'ARROW' : 'CANNON', cx, cy + 10);
+  ctx.fillText(stats.label.toUpperCase(), cx, cy + 10);
 }
 
 // ── Public render entry-point ─────────────────────────────────────────────────
 
 export interface HoveredTile { col: number; row: number }
+
+/** A tower that hasn't been placed yet — shown as a semi-transparent preview. */
+export interface GhostTower { col: number; row: number; type: TowerType }
 
 export function renderMap(
   ctx: CanvasRenderingContext2D,
@@ -343,6 +402,8 @@ export function renderMap(
   tileOverrides: TileOverrides = {},
   tileEditMode = false,
   showObstacles = true,
+  ghostTower: GhostTower | null = null,
+  towerImages: Partial<Record<TowerType, HTMLImageElement>> = {},
 ) {
   const { grid, waypoints } = level;
   const flowMap = buildFlowMap(waypoints);
@@ -383,7 +444,9 @@ export function renderMap(
   if (hoveredTile) {
     const { col, row } = hoveredTile;
     const type = tileType(col, row);
-    const canInteract = tileEditMode ? type !== 'path' : type === 'grass';
+    const hasTower = towers.some(t => t.col === col && t.row === row);
+    // Green highlight only for empty grass; sell outline is drawn later (layer 7.5)
+    const canInteract = tileEditMode ? type !== 'path' : (type === 'grass' && !hasTower);
 
     if (canInteract) {
       const [tl, tr, br, bl] = h.tileScreenCorners(col, row);
@@ -418,9 +481,50 @@ export function renderMap(
   drawLabel(ctx, eCx, eCy, 'ENTRANCE');
   drawLabel(ctx, bCx, bCy, 'BASE');
 
-  // ── Layer 7: placed towers ────────────────────────────────────────────────
-  for (const tower of towers) {
-    drawTowerPlaceholder(ctx, tower.col, tower.row, tower.type, h);
+  // ── Layer 6.5: range rings (drawn behind placed towers) ──────────────────
+  // Ghost range ring
+  if (ghostTower) {
+    const gs = TOWER_STATS[ghostTower.type];
+    drawRangeRing(ctx, ghostTower.col, ghostTower.row, gs.range,
+                  gs.ringFill, gs.ringStroke, h);
+  }
+  // Sell-hover range ring: show the selected tower's range when right-click is possible
+  if (hoveredTile && !tileEditMode) {
+    const ht = towers.find(t => t.col === hoveredTile.col && t.row === hoveredTile.row);
+    if (ht) {
+      const hs = TOWER_STATS[ht.type];
+      drawRangeRing(ctx, ht.col, ht.row, hs.range, hs.ringFill, hs.ringStroke, h);
+    }
+  }
+
+  // ── Layer 7: placed towers (Y-sorted back-to-front, same as enemies) ────────
+  const sortedTowers = [...towers].sort((a, b) => a.row - b.row);
+  for (const tower of sortedTowers) {
+    drawTowerPlaceholder(ctx, tower.col, tower.row, tower.type, h, towerImages[tower.type]);
+  }
+
+  // ── Layer 7.5: sell hover outline ─────────────────────────────────────────
+  if (hoveredTile && !tileEditMode) {
+    const { col, row } = hoveredTile;
+    if (towers.some(t => t.col === col && t.row === row)) {
+      const [tl, tr, br, bl] = h.tileScreenCorners(col, row);
+      ctx.strokeStyle = SELL_STROKE;
+      ctx.lineWidth   = 2.5;
+      ctx.beginPath();
+      traceRoundedQuad(ctx, tl, tr, br, bl, h.radius);
+      ctx.stroke();
+
+      const [cx, cy] = h.perspCenter(col, row);
+      drawLabel(ctx, cx, cy + 16, 'SELL');
+    }
+  }
+
+  // ── Layer 8: ghost tower (semi-transparent placement preview) ─────────────
+  if (ghostTower) {
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    drawTowerPlaceholder(ctx, ghostTower.col, ghostTower.row, ghostTower.type, h, towerImages[ghostTower.type]);
+    ctx.restore();
   }
 }
 

@@ -4,18 +4,14 @@ import { GridDebugPanel } from './components/GridDebugPanel';
 import { TileEditorPanel } from './components/TileEditorPanel';
 import {
   STARTING_GOLD, LIVES_START,
-  TOWER_COST_ARROW, TOWER_COST_CANNON,
   GOLD_PER_KILL,
+  TOWER_SELL_REFUND,
 } from './constants';
 import type { Tower, TowerType, TileOverrides } from './types';
+import { TOWER_STATS } from './engine/towerData';
 import { DEFAULT_GRID_CONFIG } from './engine/mapRenderer';
 import type { GridConfig } from './engine/mapRenderer';
 import { LEVEL1 } from './data/level1';
-
-const TOWER_COST: Record<TowerType, number> = {
-  arrow:  TOWER_COST_ARROW,
-  cannon: TOWER_COST_CANNON,
-};
 
 export default function App() {
   const [gold,          setGold]          = useState(STARTING_GOLD);
@@ -37,13 +33,23 @@ export default function App() {
 
   const handlePlaceTower = useCallback((col: number, row: number) => {
     if (!selectedTower) return;
-    const cost = TOWER_COST[selectedTower];
+    const cost = TOWER_STATS[selectedTower].cost;
     if (gold < cost) return;
     setTowers(prev => [...prev, { col, row, type: selectedTower }]);
     setGold(prev => prev - cost);
   }, [selectedTower, gold]);
 
-  const canAfford = (type: TowerType) => gold >= TOWER_COST[type];
+  const canAfford = (type: TowerType) => gold >= TOWER_STATS[type].cost;
+
+  const handleSellTower = useCallback((col: number, row: number) => {
+    setTowers(prev => {
+      const tower = prev.find(t => t.col === col && t.row === row);
+      if (!tower) return prev;
+      const refund = Math.floor(TOWER_STATS[tower.type].cost * TOWER_SELL_REFUND);
+      setGold(g => g + refund);
+      return prev.filter(t => !(t.col === col && t.row === row));
+    });
+  }, []);
 
   const handleStartWave = () => {
     if (waveActive) return;
@@ -147,15 +153,16 @@ export default function App() {
             onEnemyReachedBase={handleEnemyReachedBase}
             onEnemyKilled={handleEnemyKilled}
             onWaveComplete={handleWaveComplete}
+            onSellTower={handleSellTower}
           />
         </div>
 
         <aside className="w-56 bg-stone-900 border-l border-stone-700 p-4 flex flex-col gap-3">
           <h2 className="text-xs uppercase tracking-widest text-stone-400 mb-1">Towers</h2>
 
-          {(['arrow', 'cannon'] as TowerType[]).map(type => {
-            const cost      = TOWER_COST[type];
-            const selected  = selectedTower === type;
+          {(['arrow', 'mage', 'cannon'] as TowerType[]).map(type => {
+            const stats      = TOWER_STATS[type];
+            const selected   = selectedTower === type;
             const affordable = canAfford(type);
             return (
               <button
@@ -171,7 +178,7 @@ export default function App() {
                       : 'bg-stone-800 border-stone-700 opacity-40 cursor-not-allowed',
                 ].join(' ')}
               >
-                {type === 'arrow' ? 'Arrow' : 'Cannon'} Tower — {cost}g
+                {stats.label} Tower — {stats.cost}g
               </button>
             );
           })}

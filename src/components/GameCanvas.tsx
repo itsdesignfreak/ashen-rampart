@@ -1,9 +1,16 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, MAP_BG_SRC, WAVE_SPAWN_INTERVAL, WAVE_ENEMY_COUNT } from '../constants';
 import { renderMap, drawEnemies, perspHitTest } from '../engine/mapRenderer';
-import type { HoveredTile, GridConfig } from '../engine/mapRenderer';
+import type { HoveredTile, GridConfig, GhostTower } from '../engine/mapRenderer';
 import { DEFAULT_GRID_CONFIG } from '../engine/mapRenderer';
+import { TOWER_STATS } from '../engine/towerData';
 import type { Tower, TowerType, TileOverrides } from '../types';
+// Tower sprite filenames keyed by TowerType
+const TOWER_SPRITE_FILE: Record<TowerType, string> = {
+  arrow:  'archer.png',
+  mage:   'mage.png',
+  cannon: 'cannon.png',
+};
 import { LEVEL1 } from '../data/level1';
 import type { Enemy } from '../engine/enemy';
 import { createEnemy, updateEnemy } from '../engine/enemy';
@@ -22,18 +29,22 @@ interface Props {
   onEnemyReachedBase?:  () => void;
   onEnemyKilled?:       () => void;
   onWaveComplete?:      () => void;
+  // Tower sell
+  onSellTower?:         (col: number, row: number) => void;
 }
 
 export function GameCanvas({
   selectedTower, towers, onPlaceTower,
   gridConfig, tileOverrides, tileEditMode, onToggleTile, showObstacles,
   waveActive, onEnemyReachedBase, onEnemyKilled, onWaveComplete,
+  onSellTower,
 }: Props) {
 
   // ── Canvas / image refs ────────────────────────────────────────────────────
-  const canvasRef      = useRef<HTMLCanvasElement>(null);
-  const bgImageRef     = useRef<HTMLImageElement | null>(null);
-  const skeletonImgRef = useRef<HTMLImageElement | null>(null);
+  const canvasRef        = useRef<HTMLCanvasElement>(null);
+  const bgImageRef       = useRef<HTMLImageElement | null>(null);
+  const skeletonImgRef   = useRef<HTMLImageElement | null>(null);
+  const towerImagesRef   = useRef<Partial<Record<TowerType, HTMLImageElement>>>({});
 
   // ── Prop mirrors (stable refs, no stale-closure risk) ─────────────────────
   const hoveredRef            = useRef<HoveredTile | null>(null);
@@ -49,6 +60,7 @@ export function GameCanvas({
   const onEnemyReachedBaseRef = useRef(onEnemyReachedBase);
   const onEnemyKilledRef      = useRef(onEnemyKilled);
   const onWaveCompleteRef     = useRef(onWaveComplete);
+  const onSellTowerRef        = useRef(onSellTower);
 
   // Sync every render
   selectedTowerRef.current      = selectedTower;
@@ -63,6 +75,7 @@ export function GameCanvas({
   onEnemyReachedBaseRef.current = onEnemyReachedBase;
   onEnemyKilledRef.current      = onEnemyKilled;
   onWaveCompleteRef.current     = onWaveComplete;
+  onSellTowerRef.current        = onSellTower;
 
   // ── Wave / enemy state (canvas-only — no React re-renders) ────────────────
   const enemiesRef           = useRef<Enemy[]>([]);
@@ -81,11 +94,24 @@ export function GameCanvas({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Compute ghost tower: show when hovering an empty grass tile with a tower selected
+    let ghost: GhostTower | null = null;
+    if (!tileEditModeRef.current && hoveredRef.current && selectedTowerRef.current) {
+      const { col, row } = hoveredRef.current;
+      const effectiveType = tileOverridesRef.current[`${col},${row}`] ?? LEVEL1.grid[row]?.[col] ?? 'grass';
+      const hasTower = towersRef.current.some(t => t.col === col && t.row === row);
+      if (effectiveType === 'grass' && !hasTower) {
+        ghost = { col, row, type: selectedTowerRef.current };
+      }
+    }
+
     renderMap(
       ctx, LEVEL1, bgImageRef.current,
       hoveredRef.current, towersRef.current,
       gridConfigRef.current, tileOverridesRef.current,
       tileEditModeRef.current, showObstaclesRef.current,
+      ghost,
+      towerImagesRef.current,
     );
 
     drawEnemies(
@@ -171,6 +197,17 @@ export function GameCanvas({
     img.src = '/assets/enemies/skeleton.png';
   }, []);
 
+  useEffect(() => {
+    (Object.entries(TOWER_SPRITE_FILE) as [TowerType, string][]).forEach(([type, file]) => {
+      const img = new Image();
+      img.onload = () => {
+        towerImagesRef.current = { ...towerImagesRef.current, [type]: img };
+      };
+      // on error: leave undefined → drawTowerPlaceholder falls back to the circle placeholder
+      img.src = `/assets/towers/${file}`;
+    });
+  }, []);
+
   // ── Start / stop game loop ─────────────────────────────────────────────────
   useEffect(() => {
     rafRef.current = requestAnimationFrame(tick);
@@ -210,11 +247,13 @@ export function GameCanvas({
     hoveredRef.current = { col, row };
 
     const effectiveType = tileOverridesRef.current[`${col},${row}`] ?? LEVEL1.grid[row][col];
+    const hasTower = towersRef.current.some(t => t.col === col && t.row === row);
     if (tileEditModeRef.current) {
       canvas.style.cursor = effectiveType !== 'path' ? 'crosshair' : 'default';
+    } else if (hasTower) {
+      canvas.style.cursor = 'pointer'; // right-click to sell
     } else {
-      const hasTower = towersRef.current.some(t => t.col === col && t.row === row);
-      const canPlace = effectiveType === 'grass' && !hasTower && selectedTowerRef.current !== null;
+      const canPlace = effectiveType === 'grass' && selectedTowerRef.current !== null;
       canvas.style.cursor = canPlace ? 'pointer' : 'default';
     }
   }, [tileAt]);
@@ -224,6 +263,17 @@ export function GameCanvas({
     const canvas = canvasRef.current;
     if (canvas) canvas.style.cursor = 'default';
   }, []);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    if (tileEditModeRef.current) return;
+    const tile = tileAt(e);
+    if (!tile) return;
+    const { col, row } = tile;
+    if (towersRef.current.some(t => t.col === col && t.row === row)) {
+      onSellTowerRef.current?.(col, row);
+    }
+  }, [tileAt]);
 
   const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const tile = tileAt(e);
@@ -254,6 +304,7 @@ export function GameCanvas({
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
     />
   );
 }
