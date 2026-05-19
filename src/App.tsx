@@ -5,6 +5,7 @@ import { TileEditorPanel } from './components/TileEditorPanel';
 import {
   STARTING_GOLD, LIVES_START,
   TOWER_COST_ARROW, TOWER_COST_CANNON,
+  GOLD_PER_KILL,
 } from './constants';
 import type { Tower, TowerType, TileOverrides } from './types';
 import { DEFAULT_GRID_CONFIG } from './engine/mapRenderer';
@@ -18,8 +19,9 @@ const TOWER_COST: Record<TowerType, number> = {
 
 export default function App() {
   const [gold,          setGold]          = useState(STARTING_GOLD);
-  const [lives]                           = useState(LIVES_START);
-  const [wave]                            = useState(0);
+  const [lives,         setLives]         = useState(LIVES_START);
+  const [wave,          setWave]          = useState(0);
+  const [waveActive,    setWaveActive]    = useState(false);
   const [selectedTower, setSelectedTower] = useState<TowerType | null>(null);
   const [towers,        setTowers]        = useState<Tower[]>([]);
   const [showDebug,       setShowDebug]       = useState(false);
@@ -42,6 +44,24 @@ export default function App() {
   }, [selectedTower, gold]);
 
   const canAfford = (type: TowerType) => gold >= TOWER_COST[type];
+
+  const handleStartWave = () => {
+    if (waveActive) return;
+    setWave(prev => prev + 1);
+    setWaveActive(true);
+  };
+
+  const handleEnemyReachedBase = useCallback(() => {
+    setLives(prev => Math.max(0, prev - 1));
+  }, []);
+
+  const handleEnemyKilled = useCallback(() => {
+    setGold(prev => prev + GOLD_PER_KILL);
+  }, []);
+
+  const handleWaveComplete = useCallback(() => {
+    setWaveActive(false);
+  }, []);
 
   const handleToggleTile = useCallback((col: number, row: number) => {
     const key = `${col},${row}`;
@@ -123,6 +143,10 @@ export default function App() {
             tileEditMode={showTileEditor}
             onToggleTile={handleToggleTile}
             showObstacles={showObstacles}
+            waveActive={waveActive}
+            onEnemyReachedBase={handleEnemyReachedBase}
+            onEnemyKilled={handleEnemyKilled}
+            onWaveComplete={handleWaveComplete}
           />
         </div>
 
@@ -160,10 +184,16 @@ export default function App() {
 
           <div className="mt-auto pt-4 border-t border-stone-700">
             <button
-              disabled
-              className="w-full py-2 bg-amber-700 hover:bg-amber-600 rounded text-sm font-semibold opacity-50 cursor-not-allowed"
+              onClick={handleStartWave}
+              disabled={waveActive || lives === 0}
+              className={[
+                'w-full py-2 rounded text-sm font-semibold transition-colors',
+                waveActive || lives === 0
+                  ? 'bg-amber-900 opacity-50 cursor-not-allowed'
+                  : 'bg-amber-700 hover:bg-amber-600 cursor-pointer',
+              ].join(' ')}
             >
-              Start Wave
+              {waveActive ? `Wave ${wave} — in progress` : `Start Wave ${wave + 1}`}
             </button>
           </div>
         </aside>

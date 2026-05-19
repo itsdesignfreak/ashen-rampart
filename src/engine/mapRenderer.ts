@@ -1,4 +1,6 @@
 import type { Direction, LevelData, Tower, TowerType, TileOverrides, Waypoint } from '../types';
+import type { Enemy } from './enemy';
+import { enemyGridPos } from './enemy';
 import {
   TILE_W, TILE_H, CANVAS_WIDTH, CANVAS_HEIGHT,
   GRID_COLS, GRID_ROWS, GRID_PERSPECTIVE_MAX_DEG,
@@ -123,7 +125,14 @@ function makeHelpers(cfg: GridConfig) {
     return null;
   }
 
-  return { perspTanAt, applyRotX, invertRotX, perspCorner, perspCenter, tileScreenCorners, hitTest, radius: RADIUS };
+  /** Exact screen position for a fractional grid coordinate (used for enemy positions). */
+  function perspPoint(col: number, row: number): [number, number] {
+    const gy = row * TH;
+    const gx = col * TW + gy * perspTanAt(col);
+    return applyRotX(gx, gy);
+  }
+
+  return { perspTanAt, applyRotX, invertRotX, perspCorner, perspCenter, perspPoint, tileScreenCorners, hitTest, radius: RADIUS };
 }
 
 // ── Public exports ────────────────────────────────────────────────────────────
@@ -412,5 +421,150 @@ export function renderMap(
   // ── Layer 7: placed towers ────────────────────────────────────────────────
   for (const tower of towers) {
     drawTowerPlaceholder(ctx, tower.col, tower.row, tower.type, h);
+  }
+}
+
+// ── Enemy rendering ───────────────────────────────────────────────────────────
+
+const ENEMY_HALF = 32;   // half-size of rendered enemy (screen px) ≈ one tile width
+const HP_BAR_W   = 56;   // total HP bar width  (screen px)
+const HP_BAR_H   = 6;    // HP bar height       (screen px)
+const HP_BAR_GAP = 4;    // gap between HP bar bottom and sprite top
+
+// Sprite sheet: 384×48 px | 8 frames | each frame 48×48 px
+const FRAME_W  = 48;     // source px per frame
+const FRAME_H  = 48;     // source frame height
+const FRAME_MS = 125;    // ms per frame = 1 000 / 8 fps
+
+/**
+ * Map an enemy's current movement segment directly to a sprite-sheet base frame.
+ * Frame layout (0-indexed columns in the 384×48 sheet, each frame 48 px wide):
+ *   0-1  walking south (down, toward camera)
+ *   2-3  walking west  (left)
+ *   4-5  walking east  (right)
+ *   6-7  walking north (up, away from camera)
+ */
+function enemyBaseFrame(enemy: Enemy, waypoints: readonly Waypoint[]): number {
+  const a = waypoints[enemy.waypointIndex];
+  const b = waypoints[Math.min(enemy.waypointIndex + 1, waypoints.length - 1)];
+  if (!a || !b) return 0;
+
+  const dc = b.col - a.col;   // positive = east, negative = west
+  const dr = b.row - a.row;   // positive = south, negative = north
+
+  if (dc < 0) return 2;       // moving left  → west  frames
+  if (dc > 0) return 4;       // moving right → east  frames
+  if (dr < 0) return 6;       // moving up    → north frames
+  return 0;                   // moving down (or stationary) → south frames
+}
+
+/**
+ * Draw all living enemies onto the canvas.
+ * Call this AFTER renderMap so enemies render on top of all map layers.
+ * @param timestamp  performance.now() value from the rAF tick — drives animation
+ */
+export function drawEnemies(
+  ctx:        CanvasRenderingContext2D,
+  enemies:    readonly Enemy[],
+  waypoints:  readonly Waypoint[],
+  gridConfig: GridConfig = DEFAULT_GRID_CONFIG,
+  spriteImg:  HTMLImageElement | null = null,
+  timestamp:  number = performance.now(),
+): void {
+  if (enemies.length === 0) return;
+  const { perspPoint } = makeHelpers(gridConfig);
+
+  // Y-sort: draw back-to-front so enemies closer to the camera (higher row)
+  // always render on top of enemies further away (lower row).
+  const sorted = enemies
+    .filter(e => e.alive)
+    .sort((a, b) => {
+      const posA = enemyGridPos(a, waypoints);
+      const posB = enemyGridPos(b, waypoints);
+      return posA.row - posB.row;   // ascending → furthest drawn first
+    });
+
+  // Global animation offset: 0 or 1, toggling at 8 fps
+  const animOffset = Math.floor(timestamp / FRAME_MS) % 2;
+
+  for (const enemy of sorted) {
+    // Centre the sprite in the path tile (+0.5 shifts from corner to tile centre)
+    const gPos     = enemyGridPos(enemy, waypoints);
+    const [cx, cy] = perspPoint(gPos.col + 0.5, gPos.row + 0.5);
+
+    // Sprite-sheet column: base frame for direction + 0/1 animation toggle
+    const frameIdx = enemyBaseFrame(enemy, waypoints) + animOffset;
+    const srcX     = frameIdx * FRAME_W;
+
+    // ── Sprite or placeholder ──────────────────────────────────────────────
+    if (spriteImg) {
+      ctx.drawImage(
+        spriteImg,
+        srcX, 0, FRAME_W, FRAME_H,                      // source rect
+        cx - ENEMY_HALF, cy - ENEMY_HALF,                // dest position
+        ENEMY_HALF * 2,  ENEMY_HALF * 2,                 // dest size
+      );
+    } else {
+      // ── Placeholder skull (shown until skeleton.png is provided) ─────────
+      ctx.fillStyle = 'rgba(18, 12, 8, 0.90)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, ENEMY_HALF, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(155, 135, 95, 0.80)';
+      ctx.lineWidth   = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, ENEMY_HALF, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Eye sockets
+      ctx.fillStyle = 'rgba(210, 190, 145, 0.92)';
+      ctx.beginPath(); ctx.arc(cx - 9, cy - 6, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 9, cy - 6, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(4, 2, 0, 1)';
+      ctx.beginPath(); ctx.arc(cx - 9, cy - 6, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 9, cy - 6, 4, 0, Math.PI * 2); ctx.fill();
+
+      // Nose
+      ctx.fillStyle = 'rgba(4, 2, 0, 0.88)';
+      ctx.beginPath(); ctx.arc(cx, cy + 3, 3, 0, Math.PI * 2); ctx.fill();
+
+      // Teeth
+      ctx.fillStyle = 'rgba(210, 190, 145, 0.88)';
+      ctx.fillRect(cx - 13, cy + 13, 6, 8);
+      ctx.fillRect(cx -  4, cy + 13, 6, 8);
+      ctx.fillRect(cx +  5, cy + 13, 6, 8);
+
+      ctx.fillStyle    = 'rgba(255, 160, 0, 0.70)';
+      ctx.font         = '8px monospace';
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText('AWAITING ASSET: skeleton.png', cx, cy + ENEMY_HALF + 3);
+    }
+
+    // ── HP bar ─────────────────────────────────────────────────────────────
+    const pct  = Math.max(0, enemy.hp / enemy.maxHp);
+    const barX = cx - HP_BAR_W / 2;
+    const barY = cy - ENEMY_HALF - HP_BAR_GAP - HP_BAR_H;
+
+    // Drop shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.beginPath();
+    ctx.roundRect(barX - 1, barY - 1, HP_BAR_W + 2, HP_BAR_H + 2, 3);
+    ctx.fill();
+
+    // Track
+    ctx.fillStyle = 'rgba(45,45,45,0.95)';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, HP_BAR_W, HP_BAR_H, 2);
+    ctx.fill();
+
+    // Fill
+    if (pct > 0) {
+      ctx.fillStyle = pct > 0.6 ? '#22c55e' : pct > 0.3 ? '#eab308' : '#ef4444';
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, HP_BAR_W * pct, HP_BAR_H, 2);
+      ctx.fill();
+    }
   }
 }

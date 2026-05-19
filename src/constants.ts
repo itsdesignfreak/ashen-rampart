@@ -26,8 +26,9 @@ export const GOLD_PER_KILL = 10;
 export const LIVES_START = 20;
 
 // Wave timing
-export const WAVE_SPAWN_INTERVAL = 800; // ms between enemy spawns in a wave
-export const WAVE_BREAK_DURATION = 5000; // ms between waves
+export const WAVE_SPAWN_INTERVAL  = 800;  // ms between enemy spawns in a wave
+export const WAVE_BREAK_DURATION  = 5000; // ms between waves
+export const WAVE_ENEMY_COUNT     = 10;   // enemies per wave
 
 // Projectiles
 export const PROJECTILE_SPEED_ARROW = 400; // px per second

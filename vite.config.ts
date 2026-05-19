@@ -7,4 +7,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    watch: {
+      // Windows native FS events miss changes in non-component .ts files;
+      // polling catches everything reliably.
+      usePolling: true,
+      interval: 300,
+    },
+  },
 })
