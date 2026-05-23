@@ -18,3 +18,14 @@ export interface Tower {
   row: number;
   type: TowerType;
 }
+
+export interface Projectile {
+  id:       number;
+  type:     TowerType;
+  x:        number;   // current grid col (fractional)
+  y:        number;   // current grid row (fractional)
+  targetId: number;   // ID of the homed enemy
+  targetX:  number;   // last known target col (updated each tick if alive)
+  targetY:  number;   // last known target row
+  alive:    boolean;
+}

@@ -19,6 +19,18 @@ export const TOWER_FIRE_RATE_ARROW  = 1000; // ms between shots
 export const TOWER_FIRE_RATE_MAGE   = 2000;
 export const TOWER_FIRE_RATE_CANNON = 2500;
 export const TOWER_SELL_REFUND = 0.5;   // fraction of cost returned on sell
+export const TOWER_FOOTPRINT   = 2;     // tiles per side (1 = single tile, 2 = 2×2)
+
+// Projectiles — damage, speed (tiles/sec), effects
+export const TOWER_DAMAGE_ARROW   = 25;
+export const TOWER_DAMAGE_MAGE    = 15;
+export const TOWER_DAMAGE_CANNON  = 60;
+export const PROJ_SPEED_ARROW     = 10;  // tiles/sec
+export const PROJ_SPEED_MAGE      = 7;
+export const PROJ_SPEED_CANNON    = 6;
+export const MAGE_SLOW_FACTOR     = 0.4; // 40 % of normal speed
+export const MAGE_SLOW_DURATION   = 2000; // ms
+export const CANNON_SPLASH_RADIUS = 1.5; // tiles
 
 // Enemies
 export const ENEMY_SPEED_BASE = 1; // tiles per second

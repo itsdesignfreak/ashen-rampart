@@ -1,13 +1,14 @@
-import type { Direction, LevelData, Tower, TowerType, TileOverrides, Waypoint } from '../types';
+import type { Direction, LevelData, Tower, TowerType, TileOverrides, Waypoint, Projectile } from '../types';
 import type { Enemy } from './enemy';
 import { enemyGridPos } from './enemy';
-import { TOWER_STATS } from './towerData';
+import { TOWER_STATS, towerOccupies } from './towerData';
 import {
   TILE_W, TILE_H, CANVAS_WIDTH, CANVAS_HEIGHT,
   GRID_COLS, GRID_ROWS, GRID_PERSPECTIVE_MAX_DEG,
   GRID_ROTATE_X_DEG, GRID_PERSP_D,
   TILE_GAP, TILE_RADIUS,
   GRID_OFFSET_X, GRID_OFFSET_Y,
+  TOWER_FOOTPRINT,
 } from '../constants';
 
 // ── Grid configuration ────────────────────────────────────────────────────────
@@ -341,8 +342,8 @@ function drawRangeRing(
   ctx.restore();
 }
 
-const TOWER_W = 64;   // sprite width  (px)
-const TOWER_H = 184;  // sprite height (px) — bottom-anchored at tile perspCenter (like enemies)
+const TOWER_W = 64;   // sprite width  (px) — drawn at TOWER_W × TOWER_FOOTPRINT
+const TOWER_H = 376;  // sprite height (px) — bottom-anchored at tile perspCenter (like enemies)
 
 function drawTowerPlaceholder(
   ctx:  CanvasRenderingContext2D,
@@ -352,22 +353,30 @@ function drawTowerPlaceholder(
   h:    ReturnType<typeof makeHelpers>,
   img?: HTMLImageElement,
 ) {
-  const [cx, cy] = h.perspCenter(col, row);
+  const FP = TOWER_FOOTPRINT;
+  // Centre of the FP×FP footprint block
+  const [cx, cy] = h.perspPoint(col + FP / 2, row + FP / 2);
+  const drawW = TOWER_W * FP;
 
   if (img) {
-    // Bottom of sprite sits slightly below the tile's perspective centre
-    ctx.drawImage(img, cx - TOWER_W / 2, cy - TOWER_H + 20, TOWER_W, TOWER_H);
+    // Bottom of sprite sits slightly below the footprint centre
+    ctx.drawImage(img, cx - drawW / 2, cy - TOWER_H + 50, drawW, TOWER_H);
     return;
   }
 
   // ── Placeholder (shown until sprite is provided) ──────────────────────────
   const stats = TOWER_STATS[type];
-  const [tl, tr, br, bl] = h.tileScreenCorners(col, row);
 
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.beginPath();
-  traceRoundedQuad(ctx, tl, tr, br, bl, h.radius);
-  ctx.fill();
+  // Dark overlay over every tile in the footprint
+  for (let dr = 0; dr < FP; dr++) {
+    for (let dc = 0; dc < FP; dc++) {
+      const [tl, tr, br, bl] = h.tileScreenCorners(col + dc, row + dr);
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.beginPath();
+      traceRoundedQuad(ctx, tl, tr, br, bl, h.radius);
+      ctx.fill();
+    }
+  }
 
   ctx.fillStyle = stats.color;
   ctx.beginPath();
@@ -403,7 +412,6 @@ export function renderMap(
   tileEditMode = false,
   showObstacles = true,
   ghostTower: GhostTower | null = null,
-  towerImages: Partial<Record<TowerType, HTMLImageElement>> = {},
 ) {
   const { grid, waypoints } = level;
   const flowMap = buildFlowMap(waypoints);
@@ -443,26 +451,24 @@ export function renderMap(
   // ── Layer 4: hover highlight ──────────────────────────────────────────────
   if (hoveredTile) {
     const { col, row } = hoveredTile;
-    const type = tileType(col, row);
-    const hasTower = towers.some(t => t.col === col && t.row === row);
-    // Green highlight only for empty grass; sell outline is drawn later (layer 7.5)
-    const canInteract = tileEditMode ? type !== 'path' : (type === 'grass' && !hasTower);
+    const type     = tileType(col, row);
+    const hasTower = towers.some(t => towerOccupies(t, col, row));
 
-    if (canInteract) {
+    if (tileEditMode && type !== 'path') {
+      // Tile-edit mode: single-tile red highlight
       const [tl, tr, br, bl] = h.tileScreenCorners(col, row);
-      const fill   = tileEditMode ? TILE_EDIT_FILL   : HOVER_FILL;
-      const stroke = tileEditMode ? TILE_EDIT_STROKE : HOVER_STROKE;
-
-      ctx.fillStyle = fill;
-      ctx.beginPath();
-      traceRoundedQuad(ctx, tl, tr, br, bl, h.radius);
-      ctx.fill();
-
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      traceRoundedQuad(ctx, tl, tr, br, bl, h.radius);
-      ctx.stroke();
+      ctx.fillStyle   = TILE_EDIT_FILL;   ctx.beginPath(); traceRoundedQuad(ctx, tl, tr, br, bl, h.radius); ctx.fill();
+      ctx.strokeStyle = TILE_EDIT_STROKE; ctx.lineWidth = 2; ctx.beginPath(); traceRoundedQuad(ctx, tl, tr, br, bl, h.radius); ctx.stroke();
+    } else if (!tileEditMode && !hasTower && ghostTower) {
+      // Placement mode: green highlight over the full FP×FP ghost footprint
+      const FP = TOWER_FOOTPRINT;
+      for (let dr = 0; dr < FP; dr++) {
+        for (let dc = 0; dc < FP; dc++) {
+          const [tl, tr, br, bl] = h.tileScreenCorners(ghostTower.col + dc, ghostTower.row + dr);
+          ctx.fillStyle   = HOVER_FILL;   ctx.beginPath(); traceRoundedQuad(ctx, tl, tr, br, bl, h.radius); ctx.fill();
+          ctx.strokeStyle = HOVER_STROKE; ctx.lineWidth = 2; ctx.beginPath(); traceRoundedQuad(ctx, tl, tr, br, bl, h.radius); ctx.stroke();
+        }
+      }
     }
   }
 
@@ -482,50 +488,79 @@ export function renderMap(
   drawLabel(ctx, bCx, bCy, 'BASE');
 
   // ── Layer 6.5: range rings (drawn behind placed towers) ──────────────────
-  // Ghost range ring
+  const FP = TOWER_FOOTPRINT;
+  // Ghost range ring — centred on the FP×FP footprint
   if (ghostTower) {
     const gs = TOWER_STATS[ghostTower.type];
-    drawRangeRing(ctx, ghostTower.col, ghostTower.row, gs.range,
-                  gs.ringFill, gs.ringStroke, h);
+    drawRangeRing(ctx, ghostTower.col + FP / 2 - 0.5, ghostTower.row + FP / 2 - 0.5,
+                  gs.range, gs.ringFill, gs.ringStroke, h);
   }
-  // Sell-hover range ring: show the selected tower's range when right-click is possible
+  // Sell-hover range ring
   if (hoveredTile && !tileEditMode) {
-    const ht = towers.find(t => t.col === hoveredTile.col && t.row === hoveredTile.row);
+    const ht = towers.find(t => towerOccupies(t, hoveredTile.col, hoveredTile.row));
     if (ht) {
       const hs = TOWER_STATS[ht.type];
-      drawRangeRing(ctx, ht.col, ht.row, hs.range, hs.ringFill, hs.ringStroke, h);
+      drawRangeRing(ctx, ht.col + FP / 2 - 0.5, ht.row + FP / 2 - 0.5,
+                    hs.range, hs.ringFill, hs.ringStroke, h);
     }
   }
 
-  // ── Layer 7: placed towers (Y-sorted back-to-front, same as enemies) ────────
-  const sortedTowers = [...towers].sort((a, b) => a.row - b.row);
-  for (const tower of sortedTowers) {
-    drawTowerPlaceholder(ctx, tower.col, tower.row, tower.type, h, towerImages[tower.type]);
-  }
+}
 
-  // ── Layer 7.5: sell hover outline ─────────────────────────────────────────
-  if (hoveredTile && !tileEditMode) {
-    const { col, row } = hoveredTile;
-    if (towers.some(t => t.col === col && t.row === row)) {
-      const [tl, tr, br, bl] = h.tileScreenCorners(col, row);
-      ctx.strokeStyle = SELL_STROKE;
-      ctx.lineWidth   = 2.5;
-      ctx.beginPath();
-      traceRoundedQuad(ctx, tl, tr, br, bl, h.radius);
-      ctx.stroke();
+// ── Per-entity draw exports — used by GameCanvas for the combined Y-sort ──────
 
-      const [cx, cy] = h.perspCenter(col, row);
-      drawLabel(ctx, cx, cy + 16, 'SELL');
-    }
-  }
+/** Draw a single tower sprite (or placeholder). */
+export function drawTowerSprite(
+  ctx:        CanvasRenderingContext2D,
+  tower:      Tower,
+  gridConfig: GridConfig = DEFAULT_GRID_CONFIG,
+  img?:       HTMLImageElement,
+): void {
+  drawTowerPlaceholder(ctx, tower.col, tower.row, tower.type, makeHelpers(gridConfig), img);
+}
 
-  // ── Layer 8: ghost tower (semi-transparent placement preview) ─────────────
-  if (ghostTower) {
-    ctx.save();
-    ctx.globalAlpha = 0.55;
-    drawTowerPlaceholder(ctx, ghostTower.col, ghostTower.row, ghostTower.type, h, towerImages[ghostTower.type]);
-    ctx.restore();
-  }
+/** Draw the sell-hover outline over a tower's footprint. Call after all entity sprites. */
+export function drawSellHoverOverlay(
+  ctx:          CanvasRenderingContext2D,
+  towers:       Tower[],
+  hoveredTile:  HoveredTile | null,
+  tileEditMode: boolean,
+  gridConfig:   GridConfig = DEFAULT_GRID_CONFIG,
+): void {
+  if (!hoveredTile || tileEditMode) return;
+  const FP = TOWER_FOOTPRINT;
+  const h  = makeHelpers(gridConfig);
+  const ht = towers.find(t => towerOccupies(t, hoveredTile.col, hoveredTile.row));
+  if (!ht) return;
+
+  const [tl]     = h.tileScreenCorners(ht.col,          ht.row);
+  const [, tr]   = h.tileScreenCorners(ht.col + FP - 1, ht.row);
+  const [,, br]  = h.tileScreenCorners(ht.col + FP - 1, ht.row + FP - 1);
+  const [,,, bl] = h.tileScreenCorners(ht.col,           ht.row + FP - 1);
+
+  ctx.strokeStyle = SELL_STROKE;
+  ctx.lineWidth   = 2.5;
+  ctx.beginPath();
+  traceRoundedQuad(ctx, tl, tr, br, bl, h.radius);
+  ctx.stroke();
+
+  const [cx, cy] = h.perspPoint(ht.col + FP / 2, ht.row + FP / 2);
+  drawLabel(ctx, cx, cy + 16, 'SELL');
+}
+
+/** Draw the ghost tower placement preview. Call after all entity sprites. */
+export function drawGhostTowerOverlay(
+  ctx:        CanvasRenderingContext2D,
+  ghost:      GhostTower | null,
+  gridConfig: GridConfig = DEFAULT_GRID_CONFIG,
+  img?:       HTMLImageElement,
+): void {
+  if (!ghost) return;
+  const h = makeHelpers(gridConfig);
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  drawTowerPlaceholder(ctx, ghost.col, ghost.row, ghost.type, h, img);
+  ctx.restore();
 }
 
 // ── Enemy rendering ───────────────────────────────────────────────────────────
@@ -562,11 +597,70 @@ function enemyBaseFrame(enemy: Enemy, waypoints: readonly Waypoint[]): number {
   return 0;                   // moving down (or stationary) → south frames
 }
 
-/**
- * Draw all living enemies onto the canvas.
- * Call this AFTER renderMap so enemies render on top of all map layers.
- * @param timestamp  performance.now() value from the rAF tick — drives animation
- */
+// Internal: draw one alive enemy given a pre-built perspPoint fn.
+function drawOneEnemy(
+  ctx:        CanvasRenderingContext2D,
+  enemy:      Enemy,
+  waypoints:  readonly Waypoint[],
+  perspPoint: (col: number, row: number) => [number, number],
+  spriteImg:  HTMLImageElement | null,
+  timestamp:  number,
+): void {
+  const animOffset = Math.floor(timestamp / FRAME_MS) % 2;
+  const gPos       = enemyGridPos(enemy, waypoints);
+  const [cx, cy]   = perspPoint(gPos.col + 0.5, gPos.row + 0.5);
+  const frameIdx   = enemyBaseFrame(enemy, waypoints) + animOffset;
+  const srcX       = frameIdx * FRAME_W;
+
+  if (spriteImg) {
+    ctx.drawImage(spriteImg, srcX, 0, FRAME_W, FRAME_H, cx - ENEMY_HALF, cy - ENEMY_HALF, ENEMY_HALF * 2, ENEMY_HALF * 2);
+  } else {
+    ctx.fillStyle = 'rgba(18, 12, 8, 0.90)';
+    ctx.beginPath(); ctx.arc(cx, cy, ENEMY_HALF, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(155, 135, 95, 0.80)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx, cy, ENEMY_HALF, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(210, 190, 145, 0.92)';
+    ctx.beginPath(); ctx.arc(cx - 9, cy - 6, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 9, cy - 6, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(4, 2, 0, 1)';
+    ctx.beginPath(); ctx.arc(cx - 9, cy - 6, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 9, cy - 6, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(4, 2, 0, 0.88)';
+    ctx.beginPath(); ctx.arc(cx, cy + 3, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(210, 190, 145, 0.88)';
+    ctx.fillRect(cx - 13, cy + 13, 6, 8); ctx.fillRect(cx - 4, cy + 13, 6, 8); ctx.fillRect(cx + 5, cy + 13, 6, 8);
+    ctx.fillStyle = 'rgba(255, 160, 0, 0.70)'; ctx.font = '8px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('AWAITING ASSET: skeleton.png', cx, cy + ENEMY_HALF + 3);
+  }
+
+  const pct  = Math.max(0, enemy.hp / enemy.maxHp);
+  const barX = cx - HP_BAR_W / 2;
+  const barY = cy - ENEMY_HALF - HP_BAR_GAP - HP_BAR_H;
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  ctx.beginPath(); ctx.roundRect(barX - 1, barY - 1, HP_BAR_W + 2, HP_BAR_H + 2, 3); ctx.fill();
+  ctx.fillStyle = 'rgba(45,45,45,0.95)';
+  ctx.beginPath(); ctx.roundRect(barX, barY, HP_BAR_W, HP_BAR_H, 2); ctx.fill();
+  if (pct > 0) {
+    ctx.fillStyle = pct > 0.6 ? '#22c55e' : pct > 0.3 ? '#eab308' : '#ef4444';
+    ctx.beginPath(); ctx.roundRect(barX, barY, HP_BAR_W * pct, HP_BAR_H, 2); ctx.fill();
+  }
+}
+
+/** Draw a single alive enemy. Used in the combined entity Y-sort pass. */
+export function drawSingleEnemy(
+  ctx:        CanvasRenderingContext2D,
+  enemy:      Enemy,
+  waypoints:  readonly Waypoint[],
+  gridConfig: GridConfig = DEFAULT_GRID_CONFIG,
+  spriteImg:  HTMLImageElement | null = null,
+  timestamp:  number = performance.now(),
+): void {
+  const { perspPoint } = makeHelpers(gridConfig);
+  drawOneEnemy(ctx, enemy, waypoints, perspPoint, spriteImg, timestamp);
+}
+
+/** Draw all living enemies (legacy batch call — still used if needed). */
 export function drawEnemies(
   ctx:        CanvasRenderingContext2D,
   enemies:    readonly Enemy[],
@@ -577,98 +671,154 @@ export function drawEnemies(
 ): void {
   if (enemies.length === 0) return;
   const { perspPoint } = makeHelpers(gridConfig);
-
-  // Y-sort: draw back-to-front so enemies closer to the camera (higher row)
-  // always render on top of enemies further away (lower row).
-  const sorted = enemies
+  const sorted = [...enemies]
     .filter(e => e.alive)
-    .sort((a, b) => {
-      const posA = enemyGridPos(a, waypoints);
-      const posB = enemyGridPos(b, waypoints);
-      return posA.row - posB.row;   // ascending → furthest drawn first
-    });
+    .sort((a, b) => enemyGridPos(a, waypoints).row - enemyGridPos(b, waypoints).row);
+  for (const enemy of sorted) drawOneEnemy(ctx, enemy, waypoints, perspPoint, spriteImg, timestamp);
+}
 
-  // Global animation offset: 0 or 1, toggling at 8 fps
-  const animOffset = Math.floor(timestamp / FRAME_MS) % 2;
+// ── Projectile rendering ──────────────────────────────────────────────────────
 
-  for (const enemy of sorted) {
-    // Centre the sprite in the path tile (+0.5 shifts from corner to tile centre)
-    const gPos     = enemyGridPos(enemy, waypoints);
-    const [cx, cy] = perspPoint(gPos.col + 0.5, gPos.row + 0.5);
+const PROJ_COLORS: Record<string, string> = {
+  arrow:  'rgba(255,255,220,0.95)',
+  mage:   'rgba(200,100,255,0.95)',
+  cannon: 'rgba(80,70,60,0.95)',
+};
 
-    // Sprite-sheet column: base frame for direction + 0/1 animation toggle
-    const frameIdx = enemyBaseFrame(enemy, waypoints) + animOffset;
-    const srcX     = frameIdx * FRAME_W;
+const PROJ_GLOW: Record<string, string> = {
+  arrow:  'rgba(255,255,180,0.35)',
+  mage:   'rgba(180,50,255,0.45)',
+  cannon: 'rgba(120,100,80,0.25)',
+};
 
-    // ── Sprite or placeholder ──────────────────────────────────────────────
-    if (spriteImg) {
-      ctx.drawImage(
-        spriteImg,
-        srcX, 0, FRAME_W, FRAME_H,                      // source rect
-        cx - ENEMY_HALF, cy - ENEMY_HALF,                // dest position
-        ENEMY_HALF * 2,  ENEMY_HALF * 2,                 // dest size
-      );
+const PROJ_RADIUS: Record<string, number> = {
+  arrow:  3,
+  mage:   5,
+  cannon: 6,
+};
+
+const ARROW_SPRITE_SIZE  = 40;  // screen px — square draw size for arrow.png
+const HIT_EFFECT_BASE_PX = 24;  // screen px — base size of a hit-effect sprite
+const HIT_EFFECT_DURATION = 500; // ms — how long the effect plays
+
+export interface HitEffect {
+  type:       TowerType;
+  x:          number;       // grid col (fractional, impact point)
+  y:          number;       // grid row (fractional, impact point)
+  startMs:    number;
+  durationMs: number;
+  followId?:  number;       // if set, effect tracks this enemy's live position
+}
+
+/** Convenience factory — call from GameCanvas when onHit fires. */
+export function createHitEffect(
+  type:      TowerType,
+  x:         number,
+  y:         number,
+  now:       number,
+  followId?: number,   // pass enemy id to make effect track the enemy
+): HitEffect {
+  return { type, x, y, startMs: now, durationMs: HIT_EFFECT_DURATION, followId };
+}
+
+/** Draw all active hit effects. Call after drawProjectiles. */
+export function drawHitEffects(
+  ctx:          CanvasRenderingContext2D,
+  effects:      readonly HitEffect[],
+  now:          number,
+  gridConfig:   GridConfig = DEFAULT_GRID_CONFIG,
+  effectImages: Partial<Record<TowerType, HTMLImageElement>> = {},
+  enemies:      readonly Enemy[] = [],
+  waypoints:    readonly Waypoint[] = [],
+): void {
+  if (effects.length === 0) return;
+  const { perspPoint } = makeHelpers(gridConfig);
+
+  for (const fx of effects) {
+    const elapsed = now - fx.startMs;
+    const t       = Math.min(elapsed / fx.durationMs, 1); // 0 → 1
+    if (t >= 1) continue;
+
+    // Resolve position — follow the enemy if alive, else fall back to stored x/y
+    let drawX = fx.x;
+    let drawY = fx.y;
+    if (fx.followId !== undefined) {
+      const target = enemies.find(e => e.id === fx.followId && e.alive);
+      if (target) {
+        const pos = enemyGridPos(target, waypoints);
+        drawX = pos.col + 0.5;
+        drawY = pos.row + 0.5;
+      }
+    }
+
+    const [sx, sy] = perspPoint(drawX, drawY);
+    const alpha    = 1 - t;               // fade out
+    const scale    = 1 + t * 0.8;        // grow from 1× → 1.8×
+    const size     = HIT_EFFECT_BASE_PX * scale;
+    const img      = effectImages[fx.type];
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    if (img) {
+      ctx.drawImage(img, sx - size / 2, sy - size / 2, size, size);
     } else {
-      // ── Placeholder skull (shown until skeleton.png is provided) ─────────
-      ctx.fillStyle = 'rgba(18, 12, 8, 0.90)';
+      // Fallback: bright ring
+      ctx.strokeStyle = fx.type === 'mage' ? '#c084fc' : fx.type === 'cannon' ? '#fb923c' : '#fef08a';
+      ctx.lineWidth   = 3 * (1 - t);
       ctx.beginPath();
-      ctx.arc(cx, cy, ENEMY_HALF, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = 'rgba(155, 135, 95, 0.80)';
-      ctx.lineWidth   = 1.5;
-      ctx.beginPath();
-      ctx.arc(cx, cy, ENEMY_HALF, 0, Math.PI * 2);
+      ctx.arc(sx, sy, size / 2, 0, Math.PI * 2);
       ctx.stroke();
-
-      // Eye sockets
-      ctx.fillStyle = 'rgba(210, 190, 145, 0.92)';
-      ctx.beginPath(); ctx.arc(cx - 9, cy - 6, 7, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx + 9, cy - 6, 7, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(4, 2, 0, 1)';
-      ctx.beginPath(); ctx.arc(cx - 9, cy - 6, 4, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx + 9, cy - 6, 4, 0, Math.PI * 2); ctx.fill();
-
-      // Nose
-      ctx.fillStyle = 'rgba(4, 2, 0, 0.88)';
-      ctx.beginPath(); ctx.arc(cx, cy + 3, 3, 0, Math.PI * 2); ctx.fill();
-
-      // Teeth
-      ctx.fillStyle = 'rgba(210, 190, 145, 0.88)';
-      ctx.fillRect(cx - 13, cy + 13, 6, 8);
-      ctx.fillRect(cx -  4, cy + 13, 6, 8);
-      ctx.fillRect(cx +  5, cy + 13, 6, 8);
-
-      ctx.fillStyle    = 'rgba(255, 160, 0, 0.70)';
-      ctx.font         = '8px monospace';
-      ctx.textAlign    = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillText('AWAITING ASSET: skeleton.png', cx, cy + ENEMY_HALF + 3);
     }
 
-    // ── HP bar ─────────────────────────────────────────────────────────────
-    const pct  = Math.max(0, enemy.hp / enemy.maxHp);
-    const barX = cx - HP_BAR_W / 2;
-    const barY = cy - ENEMY_HALF - HP_BAR_GAP - HP_BAR_H;
+    ctx.restore();
+  }
+}
 
-    // Drop shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.beginPath();
-    ctx.roundRect(barX - 1, barY - 1, HP_BAR_W + 2, HP_BAR_H + 2, 3);
-    ctx.fill();
+/** Draw all living projectiles. Call after the entity Y-sort pass. */
+export function drawProjectiles(
+  ctx:         CanvasRenderingContext2D,
+  projectiles: readonly Projectile[],
+  gridConfig:  GridConfig = DEFAULT_GRID_CONFIG,
+  projImages:  Partial<Record<TowerType, HTMLImageElement>> = {},
+): void {
+  if (projectiles.length === 0) return;
+  const { perspPoint } = makeHelpers(gridConfig);
 
-    // Track
-    ctx.fillStyle = 'rgba(45,45,45,0.95)';
-    ctx.beginPath();
-    ctx.roundRect(barX, barY, HP_BAR_W, HP_BAR_H, 2);
-    ctx.fill();
+  for (const proj of projectiles) {
+    if (!proj.alive) continue;
 
-    // Fill
-    if (pct > 0) {
-      ctx.fillStyle = pct > 0.6 ? '#22c55e' : pct > 0.3 ? '#eab308' : '#ef4444';
+    const [sx, sy] = perspPoint(proj.x, proj.y);
+    const img      = projImages[proj.type];
+
+    if (img) {
+      // Rotate sprite to face movement direction (computed in screen space)
+      const [tx, ty] = perspPoint(proj.targetX, proj.targetY);
+      const angle    = Math.atan2(ty - sy, tx - sx);
+      const half     = ARROW_SPRITE_SIZE / 2;
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(angle);
+      ctx.drawImage(img, -half, -half, ARROW_SPRITE_SIZE, ARROW_SPRITE_SIZE);
+      ctx.restore();
+      continue;
+    }
+
+    // ── Placeholder circles (fallback when no sprite is provided) ─────────────
+    const r     = PROJ_RADIUS[proj.type]  ?? 4;
+    const color = PROJ_COLORS[proj.type]  ?? '#fff';
+    const glow  = PROJ_GLOW[proj.type];
+
+    if (glow) {
       ctx.beginPath();
-      ctx.roundRect(barX, barY, HP_BAR_W * pct, HP_BAR_H, 2);
+      ctx.arc(sx, sy, r * 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = glow;
       ctx.fill();
     }
+
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
   }
 }
