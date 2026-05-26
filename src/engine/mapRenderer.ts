@@ -891,6 +891,52 @@ function drawLaserBeam(
   ctx.restore();
 }
 
+// ── Cat NPC rendering ─────────────────────────────────────────────────────────
+
+import type { CatNpc } from './catNpc';
+import { CAT_FRAME_W, CAT_FRAME_H, catFrameSx } from './catNpc';
+
+const CAT_DRAW_SIZE   = 56;  // rendered px — slightly larger than the 48px source
+const CAT_ANCHOR_Y   = -CAT_DRAW_SIZE / 2; // vertical offset from tile centre (neg = up, pos = down)
+
+/**
+ * Draw the cat NPC using its sprite sheet frame.
+ * Call inside the Y-sort entity pass with sortRow = cat.y.
+ */
+export function drawCatNpc(
+  ctx:        CanvasRenderingContext2D,
+  cat:        CatNpc,
+  gridConfig: GridConfig = DEFAULT_GRID_CONFIG,
+  img?:       HTMLImageElement | null,
+): void {
+  const { perspPoint } = makeHelpers(gridConfig);
+  const [sx, sy] = perspPoint(cat.x, cat.y);
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  if (img) {
+    const frameSx = catFrameSx(cat);
+    ctx.drawImage(
+      img,
+      frameSx, 0,              // source x, y
+      CAT_FRAME_W, CAT_FRAME_H, // source w, h
+      -CAT_DRAW_SIZE / 2, CAT_ANCHOR_Y,   // dest x, y
+      CAT_DRAW_SIZE, CAT_DRAW_SIZE,        // dest w, h
+    );
+  } else {
+    // Placeholder
+    ctx.fillStyle = 'rgba(255,200,100,0.85)';
+    ctx.fillRect(-CAT_DRAW_SIZE / 2, CAT_ANCHOR_Y, CAT_DRAW_SIZE, CAT_DRAW_SIZE);
+    ctx.fillStyle = '#333';
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('CAT', 0, -CAT_DRAW_SIZE / 2);
+  }
+
+  ctx.restore();
+}
+
 /** Draw all active mage beams. Add each beam to the Y-sort pass in GameCanvas. */
 export function drawBeam(
   ctx:        CanvasRenderingContext2D,

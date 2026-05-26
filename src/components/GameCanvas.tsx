@@ -1,10 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, MAP_BG_SRC, WAVE_SPAWN_INTERVAL, WAVE_ENEMY_COUNT, TOWER_FOOTPRINT } from '../constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, MAP_BG_SRC, WAVE_SPAWN_INTERVAL, WAVE_ENEMY_COUNT, TOWER_FOOTPRINT, GRID_COLS, GRID_ROWS } from '../constants';
 import {
   renderMap, perspHitTest,
   drawTowerSprite, drawSingleEnemy,
   drawSellHoverOverlay, drawGhostTowerOverlay,
-  drawProjectiles, drawHitEffects, createHitEffect, drawBeam,
+  drawProjectiles, drawHitEffects, createHitEffect, drawBeam, drawCatNpc,
 } from '../engine/mapRenderer';
 import type { HoveredTile, GridConfig, GhostTower, HitEffect } from '../engine/mapRenderer';
 import { DEFAULT_GRID_CONFIG } from '../engine/mapRenderer';
@@ -21,6 +21,8 @@ import type { Enemy } from '../engine/enemy';
 import { createEnemy, updateEnemy, enemyGridPos } from '../engine/enemy';
 import { createProjectile, updateProjectiles } from '../engine/projectile';
 import { MAGE_DPS } from '../constants';
+import type { CatNpc } from '../engine/catNpc';
+import { createCatNpc, updateCatNpc } from '../engine/catNpc';
 
 interface Props {
   selectedTower:        TowerType | null;
@@ -38,13 +40,15 @@ interface Props {
   onWaveComplete?:      () => void;
   // Tower sell
   onSellTower?:         (col: number, row: number) => void;
+  // Audio
+  sfxVolume?:           number;  // 0–1 multiplier applied to all SFX
 }
 
 export function GameCanvas({
   selectedTower, towers, onPlaceTower,
   gridConfig, tileOverrides, tileEditMode, onToggleTile, showObstacles,
   waveActive, onEnemyReachedBase, onEnemyKilled, onWaveComplete,
-  onSellTower,
+  onSellTower, sfxVolume = 1,
 }: Props) {
 
   // ── Canvas / image refs ────────────────────────────────────────────────────
@@ -57,6 +61,13 @@ export function GameCanvas({
   const hitEffectsRef      = useRef<HitEffect[]>([]);
   const launchAudioRef     = useRef<Partial<Record<TowerType, HTMLAudioElement>>>({});
   const hitAudioRef        = useRef<Partial<Record<TowerType, HTMLAudioElement>>>({});
+  const sellAudioRef        = useRef<HTMLAudioElement | null>(null);
+  const placedAudioRef      = useRef<HTMLAudioElement | null>(null);
+  const sfxVolumeRef        = useRef(sfxVolume);
+
+  // ── Cat NPC ────────────────────────────────────────────────────────────────
+  const catImgRef  = useRef<HTMLImageElement | null>(null);
+  const catNpcRef  = useRef<CatNpc>(createCatNpc(4, 5));
 
   // ── Prop mirrors (stable refs, no stale-closure risk) ─────────────────────
   const hoveredRef            = useRef<HoveredTile | null>(null);
@@ -88,6 +99,7 @@ export function GameCanvas({
   onEnemyKilledRef.current      = onEnemyKilled;
   onWaveCompleteRef.current     = onWaveComplete;
   onSellTowerRef.current        = onSellTower;
+  sfxVolumeRef.current          = sfxVolume;
 
   // ── Wave / enemy state (canvas-only — no React re-renders) ────────────────
   const enemiesRef           = useRef<Enemy[]>([]);
@@ -170,6 +182,15 @@ export function GameCanvas({
       entities.push({
         sortRow,
         draw: () => drawHitEffects(ctx, [fx], ts, gridConfigRef.current, effectImagesRef.current, enemiesRef.current, LEVEL1.waypoints),
+      });
+    }
+
+    // Cat NPC — Y-sorted with towers and enemies
+    {
+      const cat = catNpcRef.current;
+      entities.push({
+        sortRow: cat.y + 0.5,
+        draw: () => drawCatNpc(ctx, cat, gridConfigRef.current, catImgRef.current),
       });
     }
 
@@ -293,9 +314,11 @@ export function GameCanvas({
     beamsRef.current = newBeams;
 
     // Beam audio — single looping instance, on while any beam is active
-    const anyBeam  = newBeams.size > 0;
+    const anyBeam   = newBeams.size > 0;
     const beamAudio = launchAudioRef.current.mage;
     if (beamAudio) {
+      // Keep volume in sync with sfxVolume (base volume 0.4)
+      beamAudio.volume = Math.min(1, 0.4 * sfxVolumeRef.current);
       if (anyBeam && !beamAudioPlayingRef.current) {
         beamAudio.loop        = true;
         beamAudio.currentTime = 0;
@@ -388,6 +411,13 @@ export function GameCanvas({
       onWaveCompleteRef.current?.();
     }
 
+    // Advance cat NPC — only wanders on grass tiles
+    updateCatNpc(catNpcRef.current, dt, (col, row) => {
+      if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return false;
+      const tile = tileOverridesRef.current[`${col},${row}`] ?? LEVEL1.grid[row]?.[col] ?? 'grass';
+      return tile === 'grass';
+    });
+
     redraw(timestamp);
     rafRef.current = requestAnimationFrame(tick);
   }, [redraw]);
@@ -404,6 +434,13 @@ export function GameCanvas({
     img.onload  = () => { skeletonImgRef.current = img; };
     img.onerror = () => { skeletonImgRef.current = null; };
     img.src = '/assets/enemies/skeleton.png';
+  }, []);
+
+  useEffect(() => {
+    const img = new Image();
+    img.onload  = () => { catImgRef.current = img; };
+    img.onerror = () => { catImgRef.current = null; };
+    img.src = '/assets/npc/cat.png';
   }, []);
 
   useEffect(() => {
@@ -455,15 +492,24 @@ export function GameCanvas({
     const mageLaser = new Audio('/assets/audio/mage-laser.mp3');
     mageLaser.volume = 0.4;
 
-    launchAudioRef.current = { arrow: arrowLaunch, cannon: cannonLaunch, mage: mageLaser };
-    hitAudioRef.current    = { arrow: arrowHit,    cannon: cannonHit };
+    const sellSfx = new Audio('/assets/audio/sell-tower.mp3');
+    sellSfx.volume = 0.6;
+
+    const placedSfx = new Audio('/assets/audio/tower-placed.mp3');
+    placedSfx.volume = 0.7;
+
+    launchAudioRef.current  = { arrow: arrowLaunch, cannon: cannonLaunch, mage: mageLaser };
+    hitAudioRef.current     = { arrow: arrowHit,    cannon: cannonHit };
+    sellAudioRef.current    = sellSfx;
+    placedAudioRef.current  = placedSfx;
   }, []);
 
-  // Clones the audio element so overlapping sounds play simultaneously
+  // Clones the audio element so overlapping sounds play simultaneously.
+  // Scales by sfxVolumeRef so the setting is always current.
   const playSfx = useCallback((audio: HTMLAudioElement | undefined) => {
     if (!audio) return;
     const clone = audio.cloneNode() as HTMLAudioElement;
-    clone.volume = audio.volume;
+    clone.volume = Math.min(1, audio.volume * sfxVolumeRef.current);
     clone.play().catch(() => {});
   }, []);
 
@@ -530,7 +576,10 @@ export function GameCanvas({
     if (!tile) return;
     const { col, row } = tile;
     const tower = towersRef.current.find(t => towerOccupies(t, col, row));
-    if (tower) onSellTowerRef.current?.(tower.col, tower.row);
+    if (tower) {
+      playSfx(sellAudioRef.current ?? undefined);
+      onSellTowerRef.current?.(tower.col, tower.row);
+    }
   }, [tileAt]);
 
   const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -553,6 +602,7 @@ export function GameCanvas({
         if (t !== 'grass' || towersRef.current.some(tw => towerOccupies(tw, c, r))) return;
       }
     }
+    playSfx(placedAudioRef.current ?? undefined);
     onPlaceTowerRef.current(col, row);
   }, [tileAt]);
 
