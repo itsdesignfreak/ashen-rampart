@@ -1,4 +1,4 @@
-import { ENEMY_HP_BASE, ENEMY_SPEED_BASE } from '../constants';
+import { ENEMY_HP_BASE, ENEMY_SPEED_BASE, MAGE_SLOW_FACTOR } from '../constants';
 import type { Waypoint } from '../types';
 
 // ── Enemy type ────────────────────────────────────────────────────────────────
@@ -11,6 +11,8 @@ export interface Enemy {
   maxHp:         number;
   alive:         boolean;  // false = dead (hp ≤ 0) or reached base
   reached:       boolean;  // true = made it to the base
+  slowUntil:     number;   // performance.now() timestamp after which slow expires (0 = not slowed)
+  killedFired:   boolean;  // true once onEnemyKilled callback has been dispatched
 }
 
 export function createEnemy(id: number): Enemy {
@@ -22,6 +24,8 @@ export function createEnemy(id: number): Enemy {
     maxHp:         ENEMY_HP_BASE,
     alive:         true,
     reached:       false,
+    slowUntil:     0,
+    killedFired:   false,
   };
 }
 
@@ -29,12 +33,14 @@ export function createEnemy(id: number): Enemy {
 
 /**
  * Advance an enemy along the waypoint path.
- * @param dt seconds elapsed since last frame (capped upstream)
+ * @param dt        seconds elapsed since last frame (capped upstream)
+ * @param timestamp performance.now() of the current frame (used for slow check)
  */
 export function updateEnemy(
   enemy: Enemy,
   waypoints: readonly Waypoint[],
   dt: number,
+  timestamp = 0,
 ): void {
   if (!enemy.alive) return;
 
@@ -44,8 +50,9 @@ export function updateEnemy(
 
   // Segments are always axis-aligned, so Manhattan distance = Euclidean distance
   const segLen = Math.abs(b.col - a.col) + Math.abs(b.row - a.row);
+  const speedMult = (timestamp > 0 && timestamp < enemy.slowUntil) ? MAGE_SLOW_FACTOR : 1;
 
-  enemy.progress += (ENEMY_SPEED_BASE * dt) / segLen;
+  enemy.progress += (ENEMY_SPEED_BASE * speedMult * dt) / segLen;
 
   // Advance to next segment, carrying over any overshoot
   while (enemy.progress >= 1) {

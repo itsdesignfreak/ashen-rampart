@@ -14,11 +14,24 @@ export const TOWER_COST_MAGE     = 75;
 export const TOWER_COST_CANNON   = 100;
 export const TOWER_RANGE_ARROW   = 5;    // tiles
 export const TOWER_RANGE_MAGE    = 3;
-export const TOWER_RANGE_CANNON  = 2;
+export const TOWER_RANGE_CANNON  = 3;
 export const TOWER_FIRE_RATE_ARROW  = 1000; // ms between shots
-export const TOWER_FIRE_RATE_MAGE   = 2000;
+export const TOWER_FIRE_RATE_MAGE   = 1500; // ms between laser shots
 export const TOWER_FIRE_RATE_CANNON = 2500;
 export const TOWER_SELL_REFUND = 0.5;   // fraction of cost returned on sell
+export const TOWER_FOOTPRINT   = 2;     // tiles per side (1 = single tile, 2 = 2×2)
+
+// Projectiles — damage, speed (tiles/sec), effects
+export const TOWER_DAMAGE_ARROW   = 25;
+export const TOWER_DAMAGE_MAGE    = 15;
+export const TOWER_DAMAGE_CANNON  = 60;
+export const PROJ_SPEED_ARROW     = 10;  // tiles/sec
+export const PROJ_SPEED_MAGE      = 25;  // fast — laser feels near-instant
+export const PROJ_SPEED_CANNON    = 6;
+export const MAGE_DPS             = 10;  // damage per second from the continuous beam
+export const MAGE_SLOW_FACTOR     = 0.4; // 40 % of normal speed
+export const MAGE_SLOW_DURATION   = 2000; // ms
+export const CANNON_SPLASH_RADIUS = 1.5; // tiles
 
 // Enemies
 export const ENEMY_SPEED_BASE = 1; // tiles per second

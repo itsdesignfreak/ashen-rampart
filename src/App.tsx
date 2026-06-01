@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import { GridDebugPanel } from './components/GridDebugPanel';
 import { TileEditorPanel } from './components/TileEditorPanel';
+import { SettingsPanel } from './components/SettingsPanel';
 import {
   STARTING_GOLD, LIVES_START,
   GOLD_PER_KILL,
@@ -26,6 +27,54 @@ export default function App() {
   const [showTileEditor,    setShowTileEditor]    = useState(false);
   const [tileOverrides,     setTileOverrides]     = useState<TileOverrides>({});
   const [showObstacles,     setShowObstacles]     = useState(true);
+
+  // ── Audio settings ────────────────────────────────────────────────────────
+  const [showSettings, setShowSettings] = useState(false);
+  const [bgmEnabled,   setBgmEnabled]   = useState(true);
+  const [bgmVolume,    setBgmVolume]    = useState(0.4);
+  const [sfxVolume,    setSfxVolume]    = useState(1.0);
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
+
+  // Load BGM once; start on first user interaction if autoplay is blocked
+  useEffect(() => {
+    const bgm = new Audio('/assets/audio/medieval-bgm.mp3');
+    bgm.loop   = true;
+    bgm.volume = bgmVolume;
+    bgmRef.current = bgm;
+
+    const tryPlay = () => {
+      if (bgmRef.current && bgmEnabled) {
+        bgmRef.current.play().catch(() => {});
+      }
+    };
+    // Attempt immediate play (works if user already interacted)
+    bgm.play().catch(() => {
+      // Autoplay blocked — unlock on first click
+      document.addEventListener('click', tryPlay, { once: true });
+    });
+
+    return () => {
+      bgm.pause();
+      bgm.src = '';
+      document.removeEventListener('click', tryPlay);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // React to BGM toggle
+  useEffect(() => {
+    const bgm = bgmRef.current;
+    if (!bgm) return;
+    if (bgmEnabled) {
+      bgm.play().catch(() => {});
+    } else {
+      bgm.pause();
+    }
+  }, [bgmEnabled]);
+
+  // React to BGM volume change
+  useEffect(() => {
+    if (bgmRef.current) bgmRef.current.volume = bgmVolume;
+  }, [bgmVolume]);
 
   const handleSelectTower = (type: TowerType) => {
     setSelectedTower(prev => prev === type ? null : type);
@@ -121,8 +170,31 @@ export default function App() {
           >
             {showObstacles ? '🚫 Hide Blocked' : '🚫 Show Blocked'}
           </button>
+          <button
+            onClick={() => setShowSettings(v => !v)}
+            className={[
+              'text-xs px-2 py-1 rounded border transition-colors',
+              showSettings
+                ? 'bg-amber-700 border-amber-500 text-white'
+                : 'bg-stone-800 border-stone-600 text-stone-400 hover:text-white',
+            ].join(' ')}
+          >
+            ⚙️ Audio
+          </button>
         </div>
       </header>
+
+      {showSettings && (
+        <SettingsPanel
+          bgmEnabled={bgmEnabled}
+          bgmVolume={bgmVolume}
+          sfxVolume={sfxVolume}
+          onBgmToggle={setBgmEnabled}
+          onBgmVolume={setBgmVolume}
+          onSfxVolume={setSfxVolume}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
 
       <main className="flex flex-1 overflow-hidden">
         {showDebug && (
@@ -154,6 +226,7 @@ export default function App() {
             onEnemyKilled={handleEnemyKilled}
             onWaveComplete={handleWaveComplete}
             onSellTower={handleSellTower}
+            sfxVolume={sfxVolume}
           />
         </div>
 
