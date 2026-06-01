@@ -44,15 +44,15 @@ export function SettingsPanel({
             <button
               onClick={() => onBgmToggle(!bgmEnabled)}
               className={[
-                'relative w-11 h-6 rounded-full transition-colors focus:outline-none',
+                'relative inline-flex w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none',
                 bgmEnabled ? 'bg-amber-600' : 'bg-stone-600',
               ].join(' ')}
               aria-label="Toggle BGM"
             >
               <span
                 className={[
-                  'absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform',
-                  bgmEnabled ? 'translate-x-5' : 'translate-x-0.5',
+                  'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200',
+                  bgmEnabled ? 'translate-x-5' : 'translate-x-0',
                 ].join(' ')}
               />
             </button>
