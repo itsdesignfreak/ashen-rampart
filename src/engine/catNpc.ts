@@ -1,15 +1,22 @@
 // ── Cat NPC — decorative wandering cat ───────────────────────────────────────
 //
-// Sprite sheet: 384×48, 8 frames at 48×48 each, 8 fps
+// Walk sheet (cat.png): 384×48, 8 frames at 48×48 each, 8 fps
 // Frame groups (0-indexed):
 //   down  → 0, 1   (sx = 0,   48)
 //   left  → 2, 3   (sx = 96,  144)
 //   right → 4, 5   (sx = 192, 240)
 //   up    → 6, 7   (sx = 288, 336)
+//
+// Idle sheet (cat-idle.png): 192×48, 4 frames at 32×32 each, 6 fps
 
-export const CAT_FRAME_W = 48;
-export const CAT_FRAME_H = 48;
-export const CAT_FPS     = 8;
+export const CAT_FRAME_W       = 48;
+export const CAT_FRAME_H       = 48;
+export const CAT_FPS           = 8;
+
+export const IDLE_FRAME_W      = 48;
+export const IDLE_FRAME_H      = 48;
+export const IDLE_FPS          = 6;
+export const IDLE_FRAME_COUNT  = 4;
 
 export type CatDir   = 'down' | 'left' | 'right' | 'up';
 export type CatState = 'idle' | 'walking';
@@ -172,9 +179,9 @@ export function updateCatNpc(
         cat.targetY = next.row + 0.5;
         cat.dir     = dirFromVector(cat.targetX - cat.x, cat.targetY - cat.y);
       } else {
-        // Final destination reached — start idle
+        // Final destination reached — switch to bathing idle
         cat.state        = 'idle';
-        cat.idleTimeLeft = 1 + Math.random();   // 1–2 s
+        cat.idleTimeLeft = 2 + Math.random() * 2;  // 2–4 s bathing
         cat.frameIndex   = 0;
         cat.frameAccMs   = 0;
       }
@@ -185,7 +192,13 @@ export function updateCatNpc(
     }
 
   } else {
-    // Idle — countdown then pick a reachable grass tile
+    // Idle — play bathing animation, then pick a reachable grass tile
+    cat.frameAccMs += dt * 1000;
+    if (cat.frameAccMs >= 1000 / IDLE_FPS) {
+      cat.frameAccMs -= 1000 / IDLE_FPS;
+      cat.frameIndex  = (cat.frameIndex + 1) % IDLE_FRAME_COUNT;
+    }
+
     cat.idleTimeLeft -= dt;
     if (cat.idleTimeLeft <= 0) {
       const startCol = Math.floor(cat.x);
@@ -199,13 +212,15 @@ export function updateCatNpc(
 
         const path = bfsPath(startCol, startRow, candidate.col, candidate.row, isGrass);
         if (path.length > 0) {
-          cat.path    = path;
-          const first = cat.path.shift()!;
-          cat.targetX = first.col + 0.5;
-          cat.targetY = first.row + 0.5;
-          cat.dir     = dirFromVector(cat.targetX - cat.x, cat.targetY - cat.y);
-          cat.state   = 'walking';
-          found       = true;
+          cat.path       = path;
+          const first    = cat.path.shift()!;
+          cat.targetX    = first.col + 0.5;
+          cat.targetY    = first.row + 0.5;
+          cat.dir        = dirFromVector(cat.targetX - cat.x, cat.targetY - cat.y);
+          cat.state      = 'walking';
+          cat.frameIndex = 0;   // reset walk animation cleanly
+          cat.frameAccMs = 0;
+          found          = true;
           break;
         }
       }
@@ -219,7 +234,12 @@ export function updateCatNpc(
 
 // ── Sprite helpers ────────────────────────────────────────────────────────────
 
-/** X offset (px) into the sprite sheet for the current frame. */
+/** X offset (px) into the walk sprite sheet for the current frame. */
 export function catFrameSx(cat: CatNpc): number {
   return (DIR_FRAME_START[cat.dir] + cat.frameIndex) * CAT_FRAME_W;
+}
+
+/** X offset (px) into the idle sprite sheet for the current frame. */
+export function catIdleFrameSx(cat: CatNpc): number {
+  return cat.frameIndex * IDLE_FRAME_W;
 }

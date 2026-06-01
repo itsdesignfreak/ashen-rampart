@@ -4,7 +4,7 @@ import {
   renderMap, perspHitTest,
   drawTowerSprite, drawSingleEnemy,
   drawSellHoverOverlay, drawGhostTowerOverlay,
-  drawProjectiles, drawHitEffects, createHitEffect, drawBeam, drawCatNpc,
+  drawProjectiles, drawHitEffects, createHitEffect, drawBeam, drawCatNpc, drawBirdNpc,
 } from '../engine/mapRenderer';
 import type { HoveredTile, GridConfig, GhostTower, HitEffect } from '../engine/mapRenderer';
 import { DEFAULT_GRID_CONFIG } from '../engine/mapRenderer';
@@ -23,6 +23,11 @@ import { createProjectile, updateProjectiles } from '../engine/projectile';
 import { MAGE_DPS } from '../constants';
 import type { CatNpc } from '../engine/catNpc';
 import { createCatNpc, updateCatNpc } from '../engine/catNpc';
+import type { BirdNpc } from '../engine/birdNpc';
+import {
+  createBird, updateBird, isBirdOffScreen,
+  MAX_BIRDS, BIRD_SPAWN_MIN_MS, BIRD_SPAWN_MAX_MS,
+} from '../engine/birdNpc';
 
 interface Props {
   selectedTower:        TowerType | null;
@@ -66,8 +71,14 @@ export function GameCanvas({
   const sfxVolumeRef        = useRef(sfxVolume);
 
   // ── Cat NPC ────────────────────────────────────────────────────────────────
-  const catImgRef  = useRef<HTMLImageElement | null>(null);
-  const catNpcRef  = useRef<CatNpc>(createCatNpc(4, 5));
+  const catImgRef     = useRef<HTMLImageElement | null>(null);
+  const catIdleImgRef = useRef<HTMLImageElement | null>(null);
+  const catNpcRef     = useRef<CatNpc>(createCatNpc(4, 5));
+
+  // ── Bird NPCs ──────────────────────────────────────────────────────────────
+  const birdImgRef        = useRef<HTMLImageElement | null>(null);
+  const birdsRef          = useRef<BirdNpc[]>([]);
+  const nextBirdSpawnRef  = useRef<number>(-1); // set on first tick
 
   // ── Prop mirrors (stable refs, no stale-closure risk) ─────────────────────
   const hoveredRef            = useRef<HoveredTile | null>(null);
@@ -190,7 +201,7 @@ export function GameCanvas({
       const cat = catNpcRef.current;
       entities.push({
         sortRow: cat.y + 0.5,
-        draw: () => drawCatNpc(ctx, cat, gridConfigRef.current, catImgRef.current),
+        draw: () => drawCatNpc(ctx, cat, gridConfigRef.current, catImgRef.current, catIdleImgRef.current),
       });
     }
 
@@ -211,6 +222,11 @@ export function GameCanvas({
     // ── Overlays (always on top of all sprites) ───────────────────────────────
     drawSellHoverOverlay(ctx, towersRef.current, hoveredRef.current, tileEditModeRef.current, gridConfigRef.current);
     drawGhostTowerOverlay(ctx, ghost, gridConfigRef.current, ghost ? towerImagesRef.current[ghost.type] : undefined);
+
+    // ── Birds — highest z-order, drawn in canvas-pixel space ─────────────────
+    for (const bird of birdsRef.current) {
+      drawBirdNpc(ctx, bird, birdImgRef.current);
+    }
   }, []);
 
   // ── Game loop ──────────────────────────────────────────────────────────────
@@ -411,6 +427,22 @@ export function GameCanvas({
       onWaveCompleteRef.current?.();
     }
 
+    // ── Bird NPC tick ─────────────────────────────────────────────────────────
+    // Initialise spawn timer on the very first tick
+    if (nextBirdSpawnRef.current < 0) {
+      nextBirdSpawnRef.current = timestamp + BIRD_SPAWN_MIN_MS
+        + Math.random() * (BIRD_SPAWN_MAX_MS - BIRD_SPAWN_MIN_MS);
+    }
+    // Update & prune off-screen birds
+    for (const bird of birdsRef.current) updateBird(bird, dt);
+    birdsRef.current = birdsRef.current.filter(b => !isBirdOffScreen(b, CANVAS_WIDTH));
+    // Spawn a new bird when the timer fires and slots are available
+    if (timestamp >= nextBirdSpawnRef.current && birdsRef.current.length < MAX_BIRDS) {
+      birdsRef.current.push(createBird(CANVAS_WIDTH, CANVAS_HEIGHT));
+      nextBirdSpawnRef.current = timestamp + BIRD_SPAWN_MIN_MS
+        + Math.random() * (BIRD_SPAWN_MAX_MS - BIRD_SPAWN_MIN_MS);
+    }
+
     // Advance cat NPC — only wanders on grass tiles
     updateCatNpc(catNpcRef.current, dt, (col, row) => {
       if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return false;
@@ -441,6 +473,20 @@ export function GameCanvas({
     img.onload  = () => { catImgRef.current = img; };
     img.onerror = () => { catImgRef.current = null; };
     img.src = '/assets/npc/cat.png';
+  }, []);
+
+  useEffect(() => {
+    const img = new Image();
+    img.onload  = () => { catIdleImgRef.current = img; };
+    img.onerror = () => { catIdleImgRef.current = null; };
+    img.src = '/assets/npc/cat-idle.png';
+  }, []);
+
+  useEffect(() => {
+    const img = new Image();
+    img.onload  = () => { birdImgRef.current = img; };
+    img.onerror = () => { birdImgRef.current = null; };
+    img.src = '/assets/npc/bird.png';
   }, []);
 
   useEffect(() => {

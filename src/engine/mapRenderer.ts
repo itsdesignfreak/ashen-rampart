@@ -894,20 +894,27 @@ function drawLaserBeam(
 // ── Cat NPC rendering ─────────────────────────────────────────────────────────
 
 import type { CatNpc } from './catNpc';
-import { CAT_FRAME_W, CAT_FRAME_H, catFrameSx } from './catNpc';
+import {
+  CAT_FRAME_W, CAT_FRAME_H, catFrameSx,
+  IDLE_FRAME_W, IDLE_FRAME_H, catIdleFrameSx,
+} from './catNpc';
 
-const CAT_DRAW_SIZE   = 56;  // rendered px — slightly larger than the 48px source
-const CAT_ANCHOR_Y   = -CAT_DRAW_SIZE / 2; // vertical offset from tile centre (neg = up, pos = down)
+const CAT_DRAW_SIZE = 56;  // rendered px for walk sprite (source 48×48)
+const CAT_ANCHOR_Y  = -CAT_DRAW_SIZE / 2; // vertical offset from tile centre
+
+// Idle sprite rendered at same visual size for a smooth transition
+const IDLE_DRAW_SIZE = CAT_DRAW_SIZE;
 
 /**
- * Draw the cat NPC using its sprite sheet frame.
- * Call inside the Y-sort entity pass with sortRow = cat.y.
+ * Draw the cat NPC.  Automatically switches between walk and idle sprite
+ * sheets based on cat.state.  Call inside the Y-sort entity pass.
  */
 export function drawCatNpc(
   ctx:        CanvasRenderingContext2D,
   cat:        CatNpc,
   gridConfig: GridConfig = DEFAULT_GRID_CONFIG,
-  img?:       HTMLImageElement | null,
+  walkImg?:   HTMLImageElement | null,
+  idleImg?:   HTMLImageElement | null,
 ): void {
   const { perspPoint } = makeHelpers(gridConfig);
   const [sx, sy] = perspPoint(cat.x, cat.y);
@@ -915,23 +922,73 @@ export function drawCatNpc(
   ctx.save();
   ctx.translate(sx, sy);
 
-  if (img) {
-    const frameSx = catFrameSx(cat);
+  if (cat.state === 'idle' && idleImg) {
+    // ── Bathing idle animation ──────────────────────────────────────────────
     ctx.drawImage(
-      img,
-      frameSx, 0,              // source x, y
-      CAT_FRAME_W, CAT_FRAME_H, // source w, h
-      -CAT_DRAW_SIZE / 2, CAT_ANCHOR_Y,   // dest x, y
-      CAT_DRAW_SIZE, CAT_DRAW_SIZE,        // dest w, h
+      idleImg,
+      catIdleFrameSx(cat), 0,          // source x, y
+      IDLE_FRAME_W, IDLE_FRAME_H,       // source w, h
+      -IDLE_DRAW_SIZE / 2, CAT_ANCHOR_Y, // dest x, y
+      IDLE_DRAW_SIZE, IDLE_DRAW_SIZE,    // dest w, h
+    );
+  } else if (walkImg) {
+    // ── Walk animation ──────────────────────────────────────────────────────
+    ctx.drawImage(
+      walkImg,
+      catFrameSx(cat), 0,              // source x, y
+      CAT_FRAME_W, CAT_FRAME_H,         // source w, h
+      -CAT_DRAW_SIZE / 2, CAT_ANCHOR_Y, // dest x, y
+      CAT_DRAW_SIZE, CAT_DRAW_SIZE,      // dest w, h
     );
   } else {
-    // Placeholder
+    // Placeholder (no image loaded yet)
     ctx.fillStyle = 'rgba(255,200,100,0.85)';
     ctx.fillRect(-CAT_DRAW_SIZE / 2, CAT_ANCHOR_Y, CAT_DRAW_SIZE, CAT_DRAW_SIZE);
     ctx.fillStyle = '#333';
     ctx.font = '9px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('CAT', 0, -CAT_DRAW_SIZE / 2);
+    ctx.fillText(cat.state === 'idle' ? 'CAT~' : 'CAT', 0, CAT_ANCHOR_Y + CAT_DRAW_SIZE / 2);
+  }
+
+  ctx.restore();
+}
+
+// ── Bird NPC rendering ────────────────────────────────────────────────────────
+// Birds use raw canvas-pixel coordinates and are drawn on top of everything.
+
+import type { BirdNpc } from './birdNpc';
+import { BIRD_FRAME_W, BIRD_FRAME_H, BIRD_DRAW_SIZE, birdFrameSx } from './birdNpc';
+
+/**
+ * Draw a single bird at its canvas-pixel position.
+ * Call AFTER the Y-sort pass so birds render above all other entities.
+ */
+export function drawBirdNpc(
+  ctx: CanvasRenderingContext2D,
+  bird: BirdNpc,
+  img?: HTMLImageElement | null,
+): void {
+  ctx.save();
+  ctx.translate(bird.x, bird.y);
+
+  // Flip horizontally when flying right-to-left
+  if (bird.dir === -1) ctx.scale(-1, 1);
+
+  if (img) {
+    ctx.drawImage(
+      img,
+      birdFrameSx(bird), 0,                    // source x, y
+      BIRD_FRAME_W, BIRD_FRAME_H,               // source w, h
+      -BIRD_DRAW_SIZE / 2, -BIRD_DRAW_SIZE / 2, // dest x, y (centred)
+      BIRD_DRAW_SIZE, BIRD_DRAW_SIZE,            // dest w, h
+    );
+  } else {
+    ctx.fillStyle = 'rgba(120,180,255,0.8)';
+    ctx.fillRect(-BIRD_DRAW_SIZE / 2, -BIRD_DRAW_SIZE / 2, BIRD_DRAW_SIZE, BIRD_DRAW_SIZE);
+    ctx.fillStyle = '#000';
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('BIRD', 0, 4);
   }
 
   ctx.restore();
