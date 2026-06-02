@@ -27,6 +27,7 @@ export default function App() {
   const [showTileEditor,    setShowTileEditor]    = useState(false);
   const [tileOverrides,     setTileOverrides]     = useState<TileOverrides>({});
   const [showObstacles,     setShowObstacles]     = useState(true);
+  const [showNPC,           setShowNPC]           = useState(true);
 
   // ── Audio settings ────────────────────────────────────────────────────────
   const [showSettings, setShowSettings] = useState(false);
@@ -160,17 +161,6 @@ export default function App() {
             🖌️ Tiles
           </button>
           <button
-            onClick={() => setShowObstacles(v => !v)}
-            className={[
-              'text-xs px-2 py-1 rounded border transition-colors',
-              showObstacles
-                ? 'bg-stone-700 border-stone-500 text-white'
-                : 'bg-stone-800 border-stone-600 text-stone-500 hover:text-white',
-            ].join(' ')}
-          >
-            {showObstacles ? '🚫 Hide Blocked' : '🚫 Show Blocked'}
-          </button>
-          <button
             onClick={() => setShowSettings(v => !v)}
             className={[
               'text-xs px-2 py-1 rounded border transition-colors',
@@ -179,13 +169,17 @@ export default function App() {
                 : 'bg-stone-800 border-stone-600 text-stone-400 hover:text-white',
             ].join(' ')}
           >
-            ⚙️ Audio
+            ⚙️ Settings
           </button>
         </div>
       </header>
 
       {showSettings && (
         <SettingsPanel
+          showObstacles={showObstacles}
+          showNPC={showNPC}
+          onToggleObstacles={setShowObstacles}
+          onToggleNPC={setShowNPC}
           bgmEnabled={bgmEnabled}
           bgmVolume={bgmVolume}
           sfxVolume={sfxVolume}
@@ -221,6 +215,7 @@ export default function App() {
             tileEditMode={showTileEditor}
             onToggleTile={handleToggleTile}
             showObstacles={showObstacles}
+            showNPC={showNPC}
             waveActive={waveActive}
             onEnemyReachedBase={handleEnemyReachedBase}
             onEnemyKilled={handleEnemyKilled}

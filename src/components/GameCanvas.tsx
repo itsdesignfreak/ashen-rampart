@@ -38,6 +38,7 @@ interface Props {
   tileEditMode?:        boolean;
   onToggleTile?:        (col: number, row: number) => void;
   showObstacles?:       boolean;
+  showNPC?:             boolean;
   // Wave / enemy
   waveActive?:          boolean;
   onEnemyReachedBase?:  () => void;
@@ -52,6 +53,7 @@ interface Props {
 export function GameCanvas({
   selectedTower, towers, onPlaceTower,
   gridConfig, tileOverrides, tileEditMode, onToggleTile, showObstacles,
+  showNPC = true,
   waveActive, onEnemyReachedBase, onEnemyKilled, onWaveComplete,
   onSellTower, sfxVolume = 1,
 }: Props) {
@@ -90,6 +92,7 @@ export function GameCanvas({
   const tileEditModeRef       = useRef(tileEditMode ?? false);
   const onToggleTileRef       = useRef(onToggleTile);
   const showObstaclesRef      = useRef(showObstacles ?? true);
+  const showNPCRef            = useRef(showNPC);
   const waveActiveRef         = useRef(waveActive ?? false);
   const onEnemyReachedBaseRef = useRef(onEnemyReachedBase);
   const onEnemyKilledRef      = useRef(onEnemyKilled);
@@ -105,6 +108,7 @@ export function GameCanvas({
   tileEditModeRef.current       = tileEditMode ?? false;
   onToggleTileRef.current       = onToggleTile;
   showObstaclesRef.current      = showObstacles ?? true;
+  showNPCRef.current            = showNPC;
   waveActiveRef.current         = waveActive ?? false;
   onEnemyReachedBaseRef.current = onEnemyReachedBase;
   onEnemyKilledRef.current      = onEnemyKilled;
@@ -197,7 +201,7 @@ export function GameCanvas({
     }
 
     // Cat NPC — Y-sorted with towers and enemies
-    {
+    if (showNPCRef.current) {
       const cat = catNpcRef.current;
       entities.push({
         sortRow: cat.y + 0.5,
@@ -224,8 +228,10 @@ export function GameCanvas({
     drawGhostTowerOverlay(ctx, ghost, gridConfigRef.current, ghost ? towerImagesRef.current[ghost.type] : undefined);
 
     // ── Birds — highest z-order, drawn in canvas-pixel space ─────────────────
-    for (const bird of birdsRef.current) {
-      drawBirdNpc(ctx, bird, birdImgRef.current);
+    if (showNPCRef.current) {
+      for (const bird of birdsRef.current) {
+        drawBirdNpc(ctx, bird, birdImgRef.current);
+      }
     }
   }, []);
 

@@ -2,6 +2,10 @@ import type { Direction, LevelData, Tower, TowerType, TileOverrides, Waypoint, P
 import type { Enemy } from './enemy';
 import { enemyGridPos } from './enemy';
 import { TOWER_STATS, towerOccupies } from './towerData';
+import type { CatNpc } from './catNpc';
+import { CAT_FRAME_W, CAT_FRAME_H, catFrameSx, IDLE_FRAME_W, IDLE_FRAME_H, catIdleFrameSx } from './catNpc';
+import type { BirdNpc } from './birdNpc';
+import { BIRD_FRAME_W, BIRD_FRAME_H, BIRD_DRAW_SIZE, birdFrameSx } from './birdNpc';
 import {
   TILE_W, TILE_H, CANVAS_WIDTH, CANVAS_HEIGHT,
   GRID_COLS, GRID_ROWS, GRID_PERSPECTIVE_MAX_DEG,
@@ -893,12 +897,6 @@ function drawLaserBeam(
 
 // ── Cat NPC rendering ─────────────────────────────────────────────────────────
 
-import type { CatNpc } from './catNpc';
-import {
-  CAT_FRAME_W, CAT_FRAME_H, catFrameSx,
-  IDLE_FRAME_W, IDLE_FRAME_H, catIdleFrameSx,
-} from './catNpc';
-
 const CAT_DRAW_SIZE = 56;  // rendered px for walk sprite (source 48×48)
 const CAT_ANCHOR_Y  = -CAT_DRAW_SIZE / 2; // vertical offset from tile centre
 
@@ -955,9 +953,6 @@ export function drawCatNpc(
 
 // ── Bird NPC rendering ────────────────────────────────────────────────────────
 // Birds use raw canvas-pixel coordinates and are drawn on top of everything.
-
-import type { BirdNpc } from './birdNpc';
-import { BIRD_FRAME_W, BIRD_FRAME_H, BIRD_DRAW_SIZE, birdFrameSx } from './birdNpc';
 
 /**
  * Draw a single bird at its canvas-pixel position.
