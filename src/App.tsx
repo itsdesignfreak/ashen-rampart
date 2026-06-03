@@ -30,7 +30,7 @@ export default function App() {
   const [savedGridConfig, setSavedGridConfig] = useState<GridConfig>(DEFAULT_GRID_CONFIG);
   const [showTileEditor,    setShowTileEditor]    = useState(false);
   const [tileOverrides,     setTileOverrides]     = useState<TileOverrides>({});
-  const [showObstacles,     setShowObstacles]     = useState(true);
+  const [showObstacles,     setShowObstacles]     = useState(false);
   const [showNPC,           setShowNPC]           = useState(true);
 
   // ── Wave overlay ────────────────────────────────────────────────────────────
