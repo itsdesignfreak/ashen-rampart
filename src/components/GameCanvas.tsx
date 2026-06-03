@@ -672,9 +672,8 @@ export function GameCanvas({
       ref={canvasRef}
       width={CANVAS_WIDTH}
       height={CANVAS_HEIGHT}
-      className="block border border-stone-700"
-      style={{ maxWidth: '100%', maxHeight: '100%' }}
-      aria-label="Ashen Rampart game canvas"
+      className="block w-full h-full"
+      aria-label="The Last Ward game canvas"
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}

@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&display=swap');
 @import "tailwindcss";
 
@@ -7,10 +8,16 @@
 
 body {
   margin: 0;
-  background: #0c0a09;
+  background: #f0efea;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-/* ── Medieval display font ───────────────────────────────────────────── */
+/* ── UI font (clean) ─────────────────────────────────────────────────── */
+.font-ui {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ── Medieval display font (in-game flair: overlays, floating numbers) ── */
 .font-medieval {
   font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
 }

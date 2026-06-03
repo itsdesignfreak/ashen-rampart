@@ -4,6 +4,7 @@ import { GridDebugPanel } from './components/GridDebugPanel';
 import { TileEditorPanel } from './components/TileEditorPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { BottomHUD } from './components/BottomHUD';
+import { Pill } from './components/Pill';
 import { WaveOverlay } from './components/WaveOverlay';
 import type { WaveOverlayData } from './components/WaveOverlay';
 import {
@@ -11,6 +12,7 @@ import {
   GOLD_PER_KILL,
   TOWER_SELL_REFUND,
   TOWER_FOOTPRINT,
+  CANVAS_WIDTH, CANVAS_HEIGHT,
 } from './constants';
 import type { Tower, TowerType, TileOverrides } from './types';
 import { TOWER_STATS } from './engine/towerData';
@@ -171,35 +173,36 @@ export default function App() {
   }, [tileOverrides]);
 
   return (
-    <div className="h-screen bg-stone-950 text-stone-100 flex flex-col overflow-hidden">
-      {/* ── Minimal top bar: title + dev tools ── */}
-      <header className="shrink-0 flex items-center justify-between px-6 py-2 bg-stone-950/80 border-b border-amber-900/30">
-        <h1 className="font-medieval text-lg font-bold tracking-[0.3em] uppercase text-amber-400">
-          Ashen Rampart
-        </h1>
+    <div className="h-screen bg-[#f0efea] text-black flex flex-col overflow-hidden font-ui">
+      {/* ── Top bar: logo + title (left), dev tools (right) ── */}
+      <header className="shrink-0 flex items-center justify-between p-6 border-b border-black/10">
         <div className="flex items-center gap-2">
-          <button
+          <span
+            className="flex items-center justify-center p-1.5 rounded-full"
+            style={{
+              backgroundColor: '#333',
+              boxShadow: '0px 0px 0px 0.5px rgba(0,0,0,0.8), inset 0px 0px 0px 0.5px rgba(255,255,255,0.25)',
+            }}
+          >
+            <img src="/assets/ui/icons/logo.svg" alt="" className="block size-4" draggable={false} />
+          </span>
+          <span className="font-ui text-[16px] text-black">The Last Ward</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <Pill
+            icon="/assets/ui/icons/grid.svg"
+            active={showDebug}
             onClick={() => setShowDebug(v => !v)}
-            className={[
-              'text-[10px] px-2 py-1 rounded border transition-colors',
-              showDebug
-                ? 'bg-amber-700 border-amber-500 text-white'
-                : 'bg-stone-800 border-stone-700 text-stone-500 hover:text-white',
-            ].join(' ')}
           >
-            🔧 Grid
-          </button>
-          <button
+            Grid
+          </Pill>
+          <Pill
+            icon="/assets/ui/icons/tiles.svg"
+            active={showTileEditor}
             onClick={() => setShowTileEditor(v => !v)}
-            className={[
-              'text-[10px] px-2 py-1 rounded border transition-colors',
-              showTileEditor
-                ? 'bg-red-900 border-red-600 text-white'
-                : 'bg-stone-800 border-stone-700 text-stone-500 hover:text-white',
-            ].join(' ')}
           >
-            🖌️ Tiles
-          </button>
+            Tiles
+          </Pill>
         </div>
       </header>
 
@@ -246,25 +249,41 @@ export default function App() {
             onClear={() => setTileOverrides({})}
           />
         )}
-        <div className="flex-1 min-h-0 flex items-center justify-center p-2 overflow-hidden">
-          <GameCanvas
-            selectedTower={selectedTower}
-            towers={towers}
-            onPlaceTower={handlePlaceTower}
-            gridConfig={gridConfig}
-            tileOverrides={tileOverrides}
-            tileEditMode={showTileEditor}
-            onToggleTile={handleToggleTile}
-            showObstacles={showObstacles}
-            showNPC={showNPC}
-            waveActive={waveActive}
-            onEnemyReachedBase={handleEnemyReachedBase}
-            onEnemyKilled={handleEnemyKilled}
-            onWaveComplete={handleWaveComplete}
-            onSellTower={handleSellTower}
-            sfxVolume={sfxVolume}
-            floatingNumbers={floatingNumbers}
-          />
+        <div className="flex-1 min-h-0 flex items-center justify-center p-8 overflow-hidden">
+          {/* Wooden picture-frame around the map (border-image from the Figma asset) */}
+          <div
+            className="relative"
+            style={{
+              aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}`,
+              maxWidth: '100%',
+              maxHeight: '100%',
+              borderStyle: 'solid',
+              borderWidth: '18px',
+              borderImageSource: 'url(/assets/ui/map-frame.png)',
+              borderImageSlice: 26,
+              borderImageWidth: '18px',
+              filter: 'drop-shadow(0 11px 6.5px rgba(0,0,0,0.5))',
+            }}
+          >
+            <GameCanvas
+              selectedTower={selectedTower}
+              towers={towers}
+              onPlaceTower={handlePlaceTower}
+              gridConfig={gridConfig}
+              tileOverrides={tileOverrides}
+              tileEditMode={showTileEditor}
+              onToggleTile={handleToggleTile}
+              showObstacles={showObstacles}
+              showNPC={showNPC}
+              waveActive={waveActive}
+              onEnemyReachedBase={handleEnemyReachedBase}
+              onEnemyKilled={handleEnemyKilled}
+              onWaveComplete={handleWaveComplete}
+              onSellTower={handleSellTower}
+              sfxVolume={sfxVolume}
+              floatingNumbers={floatingNumbers}
+            />
+          </div>
         </div>
       </main>
 
