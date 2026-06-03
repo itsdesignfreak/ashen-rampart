@@ -3,15 +3,19 @@ import { GameCanvas } from './components/GameCanvas';
 import { GridDebugPanel } from './components/GridDebugPanel';
 import { TileEditorPanel } from './components/TileEditorPanel';
 import { SettingsPanel } from './components/SettingsPanel';
+import { BottomHUD } from './components/BottomHUD';
+import { WaveOverlay } from './components/WaveOverlay';
+import type { WaveOverlayData } from './components/WaveOverlay';
 import {
   STARTING_GOLD, LIVES_START,
   GOLD_PER_KILL,
   TOWER_SELL_REFUND,
+  TOWER_FOOTPRINT,
 } from './constants';
 import type { Tower, TowerType, TileOverrides } from './types';
 import { TOWER_STATS } from './engine/towerData';
 import { DEFAULT_GRID_CONFIG } from './engine/mapRenderer';
-import type { GridConfig } from './engine/mapRenderer';
+import type { GridConfig, FloatingNumber } from './engine/mapRenderer';
 import { LEVEL1 } from './data/level1';
 
 export default function App() {
@@ -26,8 +30,32 @@ export default function App() {
   const [savedGridConfig, setSavedGridConfig] = useState<GridConfig>(DEFAULT_GRID_CONFIG);
   const [showTileEditor,    setShowTileEditor]    = useState(false);
   const [tileOverrides,     setTileOverrides]     = useState<TileOverrides>({});
-  const [showObstacles,     setShowObstacles]     = useState(true);
+  const [showObstacles,     setShowObstacles]     = useState(false);
   const [showNPC,           setShowNPC]           = useState(true);
+
+  // ── Wave overlay ────────────────────────────────────────────────────────────
+  const [waveOverlay, setWaveOverlay] = useState<WaveOverlayData | null>(null);
+  const overlayIdRef = useRef(0);
+
+  // ── Lives-lost red flash ───────────────────────────────────────────────────
+  const [livesFlashId, setLivesFlashId] = useState(0);
+
+  // ── Floating gold numbers (drawn on canvas) ───────────────────────────────
+  const [floatingNumbers, setFloatingNumbers] = useState<FloatingNumber[]>([]);
+  const floatIdRef = useRef(0);
+
+  /** Spawn a floating number at a fractional grid coordinate. */
+  const spawnFloat = useCallback((col: number, row: number, text: string, color: string) => {
+    const id = ++floatIdRef.current;
+    setFloatingNumbers(prev => [
+      ...prev,
+      { id, text, color, col, row, startMs: performance.now() },
+    ]);
+    // Auto-prune after the animation finishes
+    setTimeout(() => {
+      setFloatingNumbers(prev => prev.filter(n => n.id !== id));
+    }, 900);
+  }, []);
 
   // ── Audio settings ────────────────────────────────────────────────────────
   const [showSettings, setShowSettings] = useState(false);
@@ -87,7 +115,9 @@ export default function App() {
     if (gold < cost) return;
     setTowers(prev => [...prev, { col, row, type: selectedTower }]);
     setGold(prev => prev - cost);
-  }, [selectedTower, gold]);
+    const c = TOWER_FOOTPRINT / 2;
+    spawnFloat(col + c, row + c, `-${cost}g`, '#f87171');
+  }, [selectedTower, gold, spawnFloat]);
 
   const canAfford = (type: TowerType) => gold >= TOWER_STATS[type].cost;
 
@@ -97,26 +127,38 @@ export default function App() {
       if (!tower) return prev;
       const refund = Math.floor(TOWER_STATS[tower.type].cost * TOWER_SELL_REFUND);
       setGold(g => g + refund);
+      const c = TOWER_FOOTPRINT / 2;
+      spawnFloat(col + c, row + c, `+${refund}g`, '#34d399');
       return prev.filter(t => !(t.col === col && t.row === row));
     });
-  }, []);
+  }, [spawnFloat]);
 
   const handleStartWave = () => {
     if (waveActive) return;
-    setWave(prev => prev + 1);
+    const next = wave + 1;
+    setWave(next);
     setWaveActive(true);
+    setWaveOverlay({ id: ++overlayIdRef.current, kind: 'start', wave: next });
   };
 
   const handleEnemyReachedBase = useCallback(() => {
     setLives(prev => Math.max(0, prev - 1));
+    setLivesFlashId(n => n + 1);
   }, []);
 
-  const handleEnemyKilled = useCallback(() => {
+  const handleEnemyKilled = useCallback((col?: number, row?: number) => {
     setGold(prev => prev + GOLD_PER_KILL);
-  }, []);
+    if (col !== undefined && row !== undefined) {
+      spawnFloat(col, row, `+${GOLD_PER_KILL}g`, '#fcd34d');
+    }
+  }, [spawnFloat]);
 
   const handleWaveComplete = useCallback(() => {
     setWaveActive(false);
+    setWave(w => {
+      setWaveOverlay({ id: ++overlayIdRef.current, kind: 'complete', wave: w });
+      return w;
+    });
   }, []);
 
   const handleToggleTile = useCallback((col: number, row: number) => {
@@ -130,21 +172,19 @@ export default function App() {
 
   return (
     <div className="h-screen bg-stone-950 text-stone-100 flex flex-col overflow-hidden">
-      <header className="flex items-center justify-between px-6 py-3 bg-stone-900 border-b border-stone-700">
-        <h1 className="text-xl font-bold tracking-widest uppercase text-amber-400">
+      {/* ── Minimal top bar: title + dev tools ── */}
+      <header className="shrink-0 flex items-center justify-between px-6 py-2 bg-stone-950/80 border-b border-amber-900/30">
+        <h1 className="font-medieval text-lg font-bold tracking-[0.3em] uppercase text-amber-400">
           Ashen Rampart
         </h1>
-        <div className="flex items-center gap-6 text-sm font-mono">
-          <span className="text-yellow-400">Gold: {gold}</span>
-          <span className="text-red-400">Lives: {lives}</span>
-          <span className="text-stone-400">Wave: {wave}</span>
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setShowDebug(v => !v)}
             className={[
-              'text-xs px-2 py-1 rounded border transition-colors',
+              'text-[10px] px-2 py-1 rounded border transition-colors',
               showDebug
                 ? 'bg-amber-700 border-amber-500 text-white'
-                : 'bg-stone-800 border-stone-600 text-stone-400 hover:text-white',
+                : 'bg-stone-800 border-stone-700 text-stone-500 hover:text-white',
             ].join(' ')}
           >
             🔧 Grid
@@ -152,24 +192,13 @@ export default function App() {
           <button
             onClick={() => setShowTileEditor(v => !v)}
             className={[
-              'text-xs px-2 py-1 rounded border transition-colors',
+              'text-[10px] px-2 py-1 rounded border transition-colors',
               showTileEditor
                 ? 'bg-red-900 border-red-600 text-white'
-                : 'bg-stone-800 border-stone-600 text-stone-400 hover:text-white',
+                : 'bg-stone-800 border-stone-700 text-stone-500 hover:text-white',
             ].join(' ')}
           >
             🖌️ Tiles
-          </button>
-          <button
-            onClick={() => setShowSettings(v => !v)}
-            className={[
-              'text-xs px-2 py-1 rounded border transition-colors',
-              showSettings
-                ? 'bg-amber-700 border-amber-500 text-white'
-                : 'bg-stone-800 border-stone-600 text-stone-400 hover:text-white',
-            ].join(' ')}
-          >
-            ⚙️ Settings
           </button>
         </div>
       </header>
@@ -190,6 +219,18 @@ export default function App() {
         />
       )}
 
+      <WaveOverlay data={waveOverlay} onDone={() => setWaveOverlay(null)} />
+
+      {/* Lives-lost red vignette flash */}
+      {livesFlashId > 0 && (
+        <div
+          key={livesFlashId}
+          className="animate-lives-flash pointer-events-none fixed inset-0 z-30"
+          style={{ boxShadow: 'inset 0 0 120px 36px rgba(220,38,38,0.55)' }}
+        />
+      )}
+
+      {/* ── Main play area ── */}
       <main className="flex flex-1 overflow-hidden">
         {showDebug && (
           <GridDebugPanel
@@ -222,57 +263,23 @@ export default function App() {
             onWaveComplete={handleWaveComplete}
             onSellTower={handleSellTower}
             sfxVolume={sfxVolume}
+            floatingNumbers={floatingNumbers}
           />
         </div>
-
-        <aside className="w-56 bg-stone-900 border-l border-stone-700 p-4 flex flex-col gap-3">
-          <h2 className="text-xs uppercase tracking-widest text-stone-400 mb-1">Towers</h2>
-
-          {(['arrow', 'mage', 'cannon'] as TowerType[]).map(type => {
-            const stats      = TOWER_STATS[type];
-            const selected   = selectedTower === type;
-            const affordable = canAfford(type);
-            return (
-              <button
-                key={type}
-                onClick={() => handleSelectTower(type)}
-                disabled={!affordable}
-                className={[
-                  'w-full py-2 px-3 rounded text-left text-sm border transition-colors',
-                  selected
-                    ? 'bg-amber-700 border-amber-500 text-white'
-                    : affordable
-                      ? 'bg-stone-800 border-stone-600 hover:bg-stone-700 hover:border-stone-500'
-                      : 'bg-stone-800 border-stone-700 opacity-40 cursor-not-allowed',
-                ].join(' ')}
-              >
-                {stats.label} Tower — {stats.cost}g
-              </button>
-            );
-          })}
-
-          {selectedTower && (
-            <p className="text-xs text-amber-300 mt-1">
-              Click a grass tile to place
-            </p>
-          )}
-
-          <div className="mt-auto pt-4 border-t border-stone-700">
-            <button
-              onClick={handleStartWave}
-              disabled={waveActive || lives === 0}
-              className={[
-                'w-full py-2 rounded text-sm font-semibold transition-colors',
-                waveActive || lives === 0
-                  ? 'bg-amber-900 opacity-50 cursor-not-allowed'
-                  : 'bg-amber-700 hover:bg-amber-600 cursor-pointer',
-              ].join(' ')}
-            >
-              {waveActive ? `Wave ${wave} — in progress` : `Start Wave ${wave + 1}`}
-            </button>
-          </div>
-        </aside>
       </main>
+
+      {/* ── Bottom HUD ── */}
+      <BottomHUD
+        gold={gold}
+        lives={lives}
+        wave={wave}
+        selectedTower={selectedTower}
+        onSelectTower={handleSelectTower}
+        canAfford={canAfford}
+        waveActive={waveActive}
+        onStartWave={handleStartWave}
+        onOpenSettings={() => setShowSettings(true)}
+      />
     </div>
   );
 }

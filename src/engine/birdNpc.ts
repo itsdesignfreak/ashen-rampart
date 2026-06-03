@@ -9,15 +9,15 @@ export const BIRD_FRAME_H    = 48;
 export const BIRD_FPS        = 12;
 export const BIRD_FRAME_COUNT = 4;
 export const BIRD_DRAW_SIZE  = 56;   // same visual size as the cat
-export const MAX_BIRDS       = 2;
+export const MAX_BIRDS       = 3;
 
 // Wave flight parameters
 export const BIRD_WAVE_AMPLITUDE = 18;   // px — max vertical deviation
 export const BIRD_WAVE_SPEED     = 2.5;  // radians / sec (~0.4 cycles/sec)
 
-// Spawn interval: 5–10 s
-export const BIRD_SPAWN_MIN_MS = 5_000;
-export const BIRD_SPAWN_MAX_MS = 10_000;
+// Spawn interval: 2–5 s
+export const BIRD_SPAWN_MIN_MS = 2_000;
+export const BIRD_SPAWN_MAX_MS = 5_000;
 
 export interface BirdNpc {
   x:          number;   // canvas px — current horizontal position

@@ -156,6 +156,14 @@ export function perspHitTest(
   return makeHelpers(cfg).hitTest(sx, sy);
 }
 
+/** Map a fractional grid coordinate to canvas-internal pixels (1448×1086 space). */
+export function gridToCanvasPx(
+  col: number, row: number,
+  cfg: GridConfig = DEFAULT_GRID_CONFIG,
+): [number, number] {
+  return makeHelpers(cfg).perspPoint(col, row);
+}
+
 // ── Drawing helpers ───────────────────────────────────────────────────────────
 
 const ARROW_COLOR    = 'rgba(255,255,255,0.55)';
@@ -999,4 +1007,51 @@ export function drawBeam(
   const [x1, y1] = perspPoint(beam.fromX, beam.fromY);
   const [x2, y2] = perspPoint(beam.targetX, beam.targetY);
   drawLaserBeam(ctx, x1, y1, x2, y2);
+}
+
+// ── Floating numbers (+/- gold feedback) ──────────────────────────────────────
+
+export interface FloatingNumber {
+  id:      number;
+  text:    string;
+  color:   string;   // canvas fillStyle
+  col:     number;   // fractional grid col
+  row:     number;   // fractional grid row
+  startMs: number;   // performance.now() at spawn
+}
+
+const FLOAT_DURATION = 850;  // ms — must match the prune timeout in App
+const FLOAT_RISE_PX  = 60;   // canvas px the number drifts upward
+
+/** Draw all active floating numbers. Call last so they sit above everything. */
+export function drawFloatingNumbers(
+  ctx:        CanvasRenderingContext2D,
+  numbers:    FloatingNumber[],
+  now:        number,
+  gridConfig: GridConfig = DEFAULT_GRID_CONFIG,
+): void {
+  const { perspPoint } = makeHelpers(gridConfig);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 34px Cinzel, Georgia, serif';
+
+  for (const n of numbers) {
+    const t = (now - n.startMs) / FLOAT_DURATION;
+    if (t < 0 || t > 1) continue;
+
+    const [px, py] = perspPoint(n.col, n.row);
+    const y = py - t * FLOAT_RISE_PX;
+    // Pop in fast, fade out toward the end
+    const alpha = t < 0.15 ? t / 0.15 : 1 - (t - 0.15) / 0.85;
+
+    ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+    ctx.lineWidth   = 4;
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.strokeText(n.text, px, y);
+    ctx.fillStyle   = n.color;
+    ctx.fillText(n.text, px, y);
+  }
+
+  ctx.restore();
 }

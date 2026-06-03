@@ -5,8 +5,9 @@ import {
   drawTowerSprite, drawSingleEnemy,
   drawSellHoverOverlay, drawGhostTowerOverlay,
   drawProjectiles, drawHitEffects, createHitEffect, drawBeam, drawCatNpc, drawBirdNpc,
+  drawFloatingNumbers,
 } from '../engine/mapRenderer';
-import type { HoveredTile, GridConfig, GhostTower, HitEffect } from '../engine/mapRenderer';
+import type { HoveredTile, GridConfig, GhostTower, HitEffect, FloatingNumber } from '../engine/mapRenderer';
 import { DEFAULT_GRID_CONFIG } from '../engine/mapRenderer';
 import { TOWER_STATS, towerOccupies } from '../engine/towerData';
 import type { Tower, TowerType, TileOverrides, Projectile, ActiveBeam } from '../types';
@@ -42,12 +43,14 @@ interface Props {
   // Wave / enemy
   waveActive?:          boolean;
   onEnemyReachedBase?:  () => void;
-  onEnemyKilled?:       () => void;
+  onEnemyKilled?:       (col?: number, row?: number) => void;
   onWaveComplete?:      () => void;
   // Tower sell
   onSellTower?:         (col: number, row: number) => void;
   // Audio
   sfxVolume?:           number;  // 0–1 multiplier applied to all SFX
+  // Floating gold numbers (drawn on canvas, owned by App)
+  floatingNumbers?:     FloatingNumber[];
 }
 
 export function GameCanvas({
@@ -55,7 +58,7 @@ export function GameCanvas({
   gridConfig, tileOverrides, tileEditMode, onToggleTile, showObstacles,
   showNPC = true,
   waveActive, onEnemyReachedBase, onEnemyKilled, onWaveComplete,
-  onSellTower, sfxVolume = 1,
+  onSellTower, sfxVolume = 1, floatingNumbers,
 }: Props) {
 
   // ── Canvas / image refs ────────────────────────────────────────────────────
@@ -93,6 +96,7 @@ export function GameCanvas({
   const onToggleTileRef       = useRef(onToggleTile);
   const showObstaclesRef      = useRef(showObstacles ?? true);
   const showNPCRef            = useRef(showNPC);
+  const floatingNumbersRef    = useRef<FloatingNumber[]>(floatingNumbers ?? []);
   const waveActiveRef         = useRef(waveActive ?? false);
   const onEnemyReachedBaseRef = useRef(onEnemyReachedBase);
   const onEnemyKilledRef      = useRef(onEnemyKilled);
@@ -109,6 +113,7 @@ export function GameCanvas({
   onToggleTileRef.current       = onToggleTile;
   showObstaclesRef.current      = showObstacles ?? true;
   showNPCRef.current            = showNPC;
+  floatingNumbersRef.current    = floatingNumbers ?? [];
   waveActiveRef.current         = waveActive ?? false;
   onEnemyReachedBaseRef.current = onEnemyReachedBase;
   onEnemyKilledRef.current      = onEnemyKilled;
@@ -233,6 +238,9 @@ export function GameCanvas({
         drawBirdNpc(ctx, bird, birdImgRef.current);
       }
     }
+
+    // ── Floating gold numbers — drawn above everything ───────────────────────
+    drawFloatingNumbers(ctx, floatingNumbersRef.current, ts, gridConfigRef.current);
   }, []);
 
   // ── Game loop ──────────────────────────────────────────────────────────────
@@ -412,7 +420,8 @@ export function GameCanvas({
     for (const enemy of enemiesRef.current) {
       if (!enemy.alive && !enemy.reached && !enemy.killedFired) {
         enemy.killedFired = true;
-        onEnemyKilledRef.current?.();
+        const pos = enemyGridPos(enemy, LEVEL1.waypoints);
+        onEnemyKilledRef.current?.(pos.col + 0.5, pos.row + 0.5);
       }
     }
 

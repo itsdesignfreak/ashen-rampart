@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&display=swap');
 @import "tailwindcss";
 
 *, *::before, *::after {
@@ -7,4 +8,41 @@
 body {
   margin: 0;
   background: #0c0a09;
+}
+
+/* ── Medieval display font ───────────────────────────────────────────── */
+.font-medieval {
+  font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
+}
+
+/* ── Floating gold numbers (+/- gold feedback) ───────────────────────── */
+@keyframes floatUp {
+  0%   { transform: translate(-50%, 0)   scale(0.9); opacity: 0; }
+  15%  { transform: translate(-50%, -6px) scale(1.1); opacity: 1; }
+  100% { transform: translate(-50%, -46px) scale(1); opacity: 0; }
+}
+.animate-float-up {
+  animation: floatUp 850ms ease-out forwards;
+}
+
+/* ── Wave overlay (start / complete) ─────────────────────────────────── */
+@keyframes overlayIn {
+  0%   { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+@keyframes overlayOut {
+  0%   { transform: scale(1);   opacity: 1; }
+  100% { transform: scale(1.05); opacity: 0; }
+}
+.animate-overlay-in  { animation: overlayIn 300ms ease-out forwards; }
+.animate-overlay-out { animation: overlayOut 400ms ease-in forwards; }
+
+/* ── Lives-lost red vignette flash ───────────────────────────────────── */
+@keyframes livesFlash {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.animate-lives-flash {
+  animation: livesFlash 800ms ease-out forwards;
 }
