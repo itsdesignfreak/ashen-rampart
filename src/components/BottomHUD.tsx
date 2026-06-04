@@ -40,9 +40,9 @@ export function BottomHUD({
     <footer className="shrink-0 w-full flex items-center justify-between px-6 py-4 border-t border-black/10">
       {/* ── Left: stats ── */}
       <div className="flex items-center gap-3">
-        <Pill icon={ICON.coins} ariaLabel="Gold">{gold}</Pill>
-        <Pill icon={ICON.heart} ariaLabel="Lives">{lives}</Pill>
-        <Pill icon={ICON.sword} ariaLabel="Wave">{wave}</Pill>
+        <Pill icon={ICON.coins} ariaLabel="Gold"  tooltip={`Gold: ${gold}`}>{gold}</Pill>
+        <Pill icon={ICON.heart} ariaLabel="Lives" tooltip={`Life: ${lives}`}>{lives}</Pill>
+        <Pill icon={ICON.sword} ariaLabel="Wave"  tooltip={`Wave: ${wave}`}>{wave}</Pill>
       </div>
 
       {/* ── Center: tower picker ── */}

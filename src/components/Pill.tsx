@@ -19,6 +19,7 @@ interface Props {
   square?:    boolean;         // tower buttons: rounded-4px, icon stacked over label
   title?:     string;
   ariaLabel?: string;
+  tooltip?:   string;          // hover tooltip above the pill, with a downward caret
 }
 
 /**
@@ -27,7 +28,7 @@ interface Props {
  */
 export function Pill({
   children, icon, onClick, active = false, disabled = false,
-  variant = 'default', square = false, title, ariaLabel,
+  variant = 'default', square = false, title, ariaLabel, tooltip,
 }: Props) {
   // Active controls (selected tower, toggled-on dev button) adopt the accent fill.
   const accent = variant === 'accent' || active;
@@ -45,7 +46,7 @@ export function Pill({
       title={title}
       aria-label={ariaLabel}
       className={[
-        'relative flex items-center justify-center px-2 py-1.5 overflow-hidden transition-all duration-150',
+        'group relative flex items-center justify-center px-2 py-1.5 transition-all duration-150',
         square ? 'flex-col gap-1 rounded-[4px]' : 'gap-1 rounded-full',
         disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:brightness-110',
       ].join(' ')}
@@ -55,6 +56,16 @@ export function Pill({
       {children != null && (
         <span className="font-ui text-[14px] leading-none text-white whitespace-nowrap">
           {children}
+        </span>
+      )}
+
+      {tooltip && (
+        <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 hidden flex-col items-center group-hover:flex">
+          <span className="rounded-[8px] bg-[#333] px-2 py-0.5 font-ui text-[14px] font-medium leading-[1.4] tracking-[-0.0014px] text-white whitespace-nowrap">
+            {tooltip}
+          </span>
+          {/* downward caret */}
+          <span className="-mt-px h-0 w-0 border-x-[6px] border-t-[6px] border-x-transparent border-t-[#333]" />
         </span>
       )}
     </button>
