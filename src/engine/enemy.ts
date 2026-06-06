@@ -1,4 +1,4 @@
-import { ENEMY_HP_BASE, ENEMY_SPEED_BASE, MAGE_SLOW_FACTOR } from '../constants';
+import { ENEMY_HP_BASE, ENEMY_HP_WAVE_GROWTH, ENEMY_SPEED_BASE, MAGE_SLOW_FACTOR } from '../constants';
 import type { Waypoint } from '../types';
 
 // ── Enemy type ────────────────────────────────────────────────────────────────
@@ -15,13 +15,18 @@ export interface Enemy {
   killedFired:   boolean;  // true once onEnemyKilled callback has been dispatched
 }
 
-export function createEnemy(id: number): Enemy {
+/**
+ * Create an enemy for the given wave. HP grows +20% (compounding) per wave:
+ * wave 1 = 100, wave 2 = 120, wave 3 = 144.
+ */
+export function createEnemy(id: number, wave = 1): Enemy {
+  const hp = Math.round(ENEMY_HP_BASE * Math.pow(1 + ENEMY_HP_WAVE_GROWTH, Math.max(0, wave - 1)));
   return {
     id,
     waypointIndex: 0,
     progress:      0,
-    hp:            ENEMY_HP_BASE,
-    maxHp:         ENEMY_HP_BASE,
+    hp,
+    maxHp:         hp,
     alive:         true,
     reached:       false,
     slowUntil:     0,

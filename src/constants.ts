@@ -15,7 +15,7 @@ export const TOWER_COST_CANNON   = 100;
 export const TOWER_RANGE_ARROW   = 5;    // tiles
 export const TOWER_RANGE_MAGE    = 3;
 export const TOWER_RANGE_CANNON  = 3;
-export const TOWER_FIRE_RATE_ARROW  = 1000; // ms between shots
+export const TOWER_FIRE_RATE_ARROW  = 800; // ms between shots
 export const TOWER_FIRE_RATE_MAGE   = 1500; // ms between laser shots
 export const TOWER_FIRE_RATE_CANNON = 2500;
 export const TOWER_SELL_REFUND = 0.5;   // fraction of cost returned on sell
@@ -37,7 +37,7 @@ export const TOWER_SHADOW: Record<import('./types').TowerType, TowerShadowConfig
 };
 
 // Projectiles — damage, speed (tiles/sec), effects
-export const TOWER_DAMAGE_ARROW   = 25;
+export const TOWER_DAMAGE_ARROW   = 30;
 export const TOWER_DAMAGE_MAGE    = 15;
 export const TOWER_DAMAGE_CANNON  = 60;
 export const PROJ_SPEED_ARROW     = 10;  // tiles/sec
@@ -50,7 +50,8 @@ export const CANNON_SPLASH_RADIUS = 1.5; // tiles
 
 // Enemies
 export const ENEMY_SPEED_BASE = 1; // tiles per second
-export const ENEMY_HP_BASE = 100;
+export const ENEMY_HP_BASE = 200;
+export const ENEMY_HP_WAVE_GROWTH = 0.2; // +20% enemy HP per wave (compounding)
 
 // Economy
 export const STARTING_GOLD = 200;
@@ -61,6 +62,7 @@ export const LIVES_START = 20;
 export const WAVE_SPAWN_INTERVAL  = 800;  // ms between enemy spawns in a wave
 export const WAVE_BREAK_DURATION  = 5000; // ms between waves
 export const WAVE_ENEMY_COUNT     = 10;   // enemies per wave
+export const MAX_WAVES            = 3;    // V1 scope — game ends after wave 3
 
 // Projectiles
 export const PROJECTILE_SPEED_ARROW = 400; // px per second

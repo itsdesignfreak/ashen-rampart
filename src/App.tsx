@@ -13,6 +13,7 @@ import {
   TOWER_SELL_REFUND,
   TOWER_FOOTPRINT,
   CANVAS_WIDTH, CANVAS_HEIGHT,
+  MAX_WAVES,
 } from './constants';
 import type { Tower, TowerType, TileOverrides } from './types';
 import { TOWER_STATS } from './engine/towerData';
@@ -137,6 +138,7 @@ export default function App() {
 
   const handleStartWave = () => {
     if (waveActive) return;
+    if (wave >= MAX_WAVES) return; // V1 ends after wave 3
     const next = wave + 1;
     setWave(next);
     setWaveActive(true);
@@ -276,6 +278,7 @@ export default function App() {
               showObstacles={showObstacles}
               showNPC={showNPC}
               waveActive={waveActive}
+              wave={wave}
               onEnemyReachedBase={handleEnemyReachedBase}
               onEnemyKilled={handleEnemyKilled}
               onWaveComplete={handleWaveComplete}
