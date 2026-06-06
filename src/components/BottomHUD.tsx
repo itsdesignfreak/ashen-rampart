@@ -1,5 +1,6 @@
 import type { TowerType } from '../types';
 import { TOWER_STATS } from '../engine/towerData';
+import { MAX_WAVES } from '../constants';
 import { Pill } from './Pill';
 
 interface Props {
@@ -67,14 +68,23 @@ export function BottomHUD({
 
       {/* ── Right: actions ── */}
       <div className="flex items-center gap-3">
-        <Pill
-          variant="accent"
-          icon={ICON.sword}
-          onClick={onStartWave}
-          disabled={waveActive || lives === 0}
-        >
-          {waveActive ? `Wave ${wave} — Fighting` : `Start Wave ${wave + 1}`}
-        </Pill>
+        {(() => {
+          const allWavesDone = !waveActive && wave >= MAX_WAVES;
+          return (
+            <Pill
+              variant="accent"
+              icon={ICON.sword}
+              onClick={onStartWave}
+              disabled={waveActive || lives === 0 || allWavesDone}
+            >
+              {waveActive
+                ? `Wave ${wave} — Fighting`
+                : allWavesDone
+                  ? 'All Waves Cleared'
+                  : `Start Wave ${wave + 1}`}
+            </Pill>
+          );
+        })()}
         <Pill icon={ICON.gear} onClick={onOpenSettings}>Settings</Pill>
       </div>
     </footer>

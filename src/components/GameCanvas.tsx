@@ -49,6 +49,7 @@ interface Props {
   showNPC?:             boolean;
   // Wave / enemy
   waveActive?:          boolean;
+  wave?:                number;   // current wave number (1-based); scales enemy HP
   onEnemyReachedBase?:  () => void;
   onEnemyKilled?:       (col?: number, row?: number) => void;
   onWaveComplete?:      () => void;
@@ -64,7 +65,7 @@ export function GameCanvas({
   selectedTower, towers, onPlaceTower,
   gridConfig, tileOverrides, tileEditMode, onToggleTile, showObstacles,
   showNPC = true,
-  waveActive, onEnemyReachedBase, onEnemyKilled, onWaveComplete,
+  waveActive, wave = 1, onEnemyReachedBase, onEnemyKilled, onWaveComplete,
   onSellTower, sfxVolume = 1, floatingNumbers,
 }: Props) {
 
@@ -106,6 +107,7 @@ export function GameCanvas({
   const showNPCRef            = useRef(showNPC);
   const floatingNumbersRef    = useRef<FloatingNumber[]>(floatingNumbers ?? []);
   const waveActiveRef         = useRef(waveActive ?? false);
+  const waveRef               = useRef(wave);
   const onEnemyReachedBaseRef = useRef(onEnemyReachedBase);
   const onEnemyKilledRef      = useRef(onEnemyKilled);
   const onWaveCompleteRef     = useRef(onWaveComplete);
@@ -123,6 +125,7 @@ export function GameCanvas({
   showNPCRef.current            = showNPC;
   floatingNumbersRef.current    = floatingNumbers ?? [];
   waveActiveRef.current         = waveActive ?? false;
+  waveRef.current               = wave;
   onEnemyReachedBaseRef.current = onEnemyReachedBase;
   onEnemyKilledRef.current      = onEnemyKilled;
   onWaveCompleteRef.current     = onWaveComplete;
@@ -277,7 +280,7 @@ export function GameCanvas({
     // Spawn next enemy when the interval has elapsed
     if (isActive && spawnedCountRef.current < WAVE_ENEMY_COUNT) {
       if (timestamp - lastSpawnMsRef.current >= WAVE_SPAWN_INTERVAL) {
-        enemiesRef.current.push(createEnemy(nextEnemyIdRef.current++));
+        enemiesRef.current.push(createEnemy(nextEnemyIdRef.current++, waveRef.current));
         spawnedCountRef.current++;
         lastSpawnMsRef.current = timestamp;
       }
