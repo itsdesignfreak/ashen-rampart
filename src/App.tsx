@@ -14,6 +14,9 @@ import {
   TOWER_FOOTPRINT,
   CANVAS_WIDTH, CANVAS_HEIGHT,
   MAX_WAVES,
+  INTRO_FADE_IN_MS, INTRO_HOLD_MS, INTRO_TITLE_OUT_MS, INTRO_PAUSE_MS,
+  INTRO_MAP_EXPAND_MS, INTRO_UI_IN_MS, INTRO_MAP_EASE,
+  INTRO_MAP_SCALE, INTRO_MAP_SHIFT_Y,
 } from './constants';
 import type { Tower, TowerType, TileOverrides } from './types';
 import { TOWER_STATS } from './engine/towerData';
@@ -35,6 +38,34 @@ export default function App() {
   const [tileOverrides,     setTileOverrides]     = useState<TileOverrides>({});
   const [showObstacles,     setShowObstacles]     = useState(false);
   const [showNPC,           setShowNPC]           = useState(true);
+
+  // ── Intro animation (title screen → game) ────────────────────────────────────
+  // Phase 0 start (bg only) · 1 title+map fade in & hold · 2 title fades out
+  // · 3 pause · 4 map slides up + expands · 5 HUD/UI fades in · 6 done.
+  const [introPhase, setIntroPhase] = useState(0);
+  useEffect(() => {
+    const titleOutAt = INTRO_FADE_IN_MS + INTRO_HOLD_MS;
+    const pauseAt    = titleOutAt + INTRO_TITLE_OUT_MS;
+    const expandAt   = pauseAt + INTRO_PAUSE_MS;
+    const uiAt       = expandAt + INTRO_MAP_EXPAND_MS;
+    const doneAt     = uiAt + INTRO_UI_IN_MS;
+
+    const raf = requestAnimationFrame(() => setIntroPhase(1)); // trigger fade-in
+    const timers = [
+      setTimeout(() => setIntroPhase(2), titleOutAt),
+      setTimeout(() => setIntroPhase(3), pauseAt),
+      setTimeout(() => setIntroPhase(4), expandAt),
+      setTimeout(() => setIntroPhase(5), uiAt),
+      setTimeout(() => setIntroPhase(6), doneAt),
+    ];
+    return () => { cancelAnimationFrame(raf); timers.forEach(clearTimeout); };
+  }, []);
+
+  // Derived intro flags
+  const introMapVisible = introPhase >= 1;
+  const introMapFull    = introPhase >= 4;
+  const introTitleShown = introPhase >= 1 && introPhase < 2;
+  const introUiVisible  = introPhase >= 5;
 
   // ── Wave overlay ────────────────────────────────────────────────────────────
   const [waveOverlay, setWaveOverlay] = useState<WaveOverlayData | null>(null);
@@ -177,7 +208,10 @@ export default function App() {
   return (
     <div className="h-screen bg-[#f0efea] text-black flex flex-col overflow-hidden font-ui">
       {/* ── Top bar: logo + title (left), dev tools (right) ── */}
-      <header className="shrink-0 flex items-center justify-between p-6 border-b border-black/10">
+      <header
+        className={`shrink-0 flex items-center justify-between p-6 border-b border-black/10 transition-opacity ${introUiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        style={{ transitionDuration: `${INTRO_UI_IN_MS}ms` }}
+      >
         <div className="flex items-center gap-2">
           <span
             className="flex items-center justify-center p-1.5 rounded-full"
@@ -251,7 +285,21 @@ export default function App() {
             onClear={() => setTileOverrides({})}
           />
         )}
-        <div className="flex-1 min-h-0 flex items-center justify-center p-8 overflow-hidden">
+        <div className="relative flex-1 min-h-0 flex items-center justify-center p-8 overflow-hidden">
+          {/* ── Intro title (Step 1): logo + "The Last Ward" above the map ── */}
+          {introPhase < 6 && (
+            <div
+              className="pointer-events-none absolute left-1/2 top-[7%] z-10 flex -translate-x-1/2 flex-col items-center gap-6 transition-opacity"
+              style={{
+                opacity: introTitleShown ? 1 : 0,
+                transitionDuration: `${introPhase >= 2 ? INTRO_TITLE_OUT_MS : INTRO_FADE_IN_MS}ms`,
+              }}
+            >
+              <img src="/assets/ui/icons/logo.svg" alt="" className="block h-[27px] w-10" draggable={false} />
+              <span className="text-[40px] leading-none text-black">The Last Ward</span>
+            </div>
+          )}
+
           {/* Wooden picture-frame around the map (border-image from the Figma asset) */}
           <div
             className="relative"
@@ -265,6 +313,9 @@ export default function App() {
               borderImageSlice: 26,
               borderImageWidth: '18px',
               filter: 'drop-shadow(0 11px 6.5px rgba(0,0,0,0.5))',
+              opacity: introMapVisible ? 1 : 0,
+              transform: introMapFull ? 'none' : `translateY(${INTRO_MAP_SHIFT_Y}) scale(${INTRO_MAP_SCALE})`,
+              transition: `opacity ${INTRO_FADE_IN_MS}ms ease-out, transform ${INTRO_MAP_EXPAND_MS}ms ${INTRO_MAP_EASE}`,
             }}
           >
             <GameCanvas
@@ -291,17 +342,22 @@ export default function App() {
       </main>
 
       {/* ── Bottom HUD ── */}
-      <BottomHUD
-        gold={gold}
-        lives={lives}
-        wave={wave}
-        selectedTower={selectedTower}
-        onSelectTower={handleSelectTower}
-        canAfford={canAfford}
-        waveActive={waveActive}
-        onStartWave={handleStartWave}
-        onOpenSettings={() => setShowSettings(true)}
-      />
+      <div
+        className={`shrink-0 transition-opacity ${introUiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        style={{ transitionDuration: `${INTRO_UI_IN_MS}ms` }}
+      >
+        <BottomHUD
+          gold={gold}
+          lives={lives}
+          wave={wave}
+          selectedTower={selectedTower}
+          onSelectTower={handleSelectTower}
+          canAfford={canAfford}
+          waveActive={waveActive}
+          onStartWave={handleStartWave}
+          onOpenSettings={() => setShowSettings(true)}
+        />
+      </div>
     </div>
   );
 }
