@@ -60,7 +60,15 @@ export function BottomHUD({
               onClick={() => onSelectTower(type)}
               title={`${stats.label} — ${stats.cost}g`}
             >
-              {stats.label}
+              <span className="inline-flex items-center gap-1">
+                <img
+                  src={ICON.coins}
+                  alt=""
+                  draggable={false}
+                  className="block size-3 shrink-0"
+                />
+                {stats.cost}
+              </span>
             </Pill>
           );
         })}
