@@ -50,7 +50,7 @@ export const CANNON_SPLASH_RADIUS = 1.5; // tiles
 
 // Enemies
 export const ENEMY_SPEED_BASE = 1; // tiles per second
-export const ENEMY_HP_BASE = 200;
+export const ENEMY_HP_BASE = 300;
 export const ENEMY_HP_WAVE_GROWTH = 0.2; // +20% enemy HP per wave (compounding)
 
 // Economy
