@@ -7,6 +7,7 @@ import { BottomHUD } from './components/BottomHUD';
 import { Pill } from './components/Pill';
 import { WaveOverlay } from './components/WaveOverlay';
 import type { WaveOverlayData } from './components/WaveOverlay';
+import { HowToPlay } from './components/HowToPlay';
 import {
   STARTING_GOLD, LIVES_START,
   GOLD_PER_KILL,
@@ -39,6 +40,7 @@ export default function App() {
   const [tileOverrides,     setTileOverrides]     = useState<TileOverrides>({});
   const [showObstacles,     setShowObstacles]     = useState(false);
   const [showNPC,           setShowNPC]           = useState(true);
+  const [showHowToPlay,     setShowHowToPlay]     = useState(false);
 
   // ── Intro animation (map → game) ─────────────────────────────────────────────
   // Phase 0 start (bg only) · 1 map fades in (small, centered) & holds
@@ -239,6 +241,7 @@ export default function App() {
               </Pill>
             </>
           )}
+          <Pill onClick={() => setShowHowToPlay(true)}>How to Play</Pill>
           <span className="font-ui text-[13px] tabular-nums text-black/40">v{APP_VERSION}</span>
         </div>
       </header>
@@ -258,6 +261,8 @@ export default function App() {
           onClose={() => setShowSettings(false)}
         />
       )}
+
+      {showHowToPlay && <HowToPlay onClose={() => setShowHowToPlay(false)} />}
 
       <WaveOverlay data={waveOverlay} onDone={() => setWaveOverlay(null)} />
 
