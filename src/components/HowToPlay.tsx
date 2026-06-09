@@ -135,19 +135,19 @@ export function HowToPlay({ onClose }: Props) {
           ))}
         </div>
 
-        {/* Footer nav */}
-        <div className="flex items-center justify-between">
+        {/* Footer nav — 3-col grid keeps the counter truly centered */}
+        <div className="grid grid-cols-3 items-center">
           <button
             onClick={prev}
             disabled={index === 0}
-            className="rounded-md px-4 py-2 text-sm text-black/60 transition-colors hover:text-black disabled:cursor-not-allowed disabled:opacity-0"
+            className="justify-self-start rounded-md px-4 py-2 text-sm text-black/60 transition-colors hover:text-black disabled:cursor-not-allowed disabled:opacity-0"
           >
             Back
           </button>
-          <span className="text-xs text-black/40">{index + 1} / {SLIDES.length}</span>
+          <span className="justify-self-center text-xs text-black/40">{index + 1} / {SLIDES.length}</span>
           <button
             onClick={next}
-            className="rounded-md px-5 py-2 text-sm font-medium text-white transition-colors"
+            className="justify-self-end rounded-md px-5 py-2 text-sm font-medium text-white transition-colors"
             style={{ backgroundColor: '#cc6026' }}
           >
             {isLast ? "Let's Play" : 'Next'}
