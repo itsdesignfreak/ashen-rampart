@@ -29,7 +29,7 @@ export function VictoryScreen({ onPlayAgain }: Props) {
         <p className="mt-4 font-ui text-lg tracking-wide text-white/75 drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
           Thanks for playing!
         </p>
-        <div className="mt-8">
+        <div className="mt-9 scale-[1.15]">
           <Pill variant="accent" icon="/assets/ui/icons/sword.svg" onClick={onPlayAgain}>
             Play Again
           </Pill>
