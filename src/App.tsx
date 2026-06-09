@@ -264,8 +264,6 @@ export default function App() {
 
       {showHowToPlay && <HowToPlay onClose={() => setShowHowToPlay(false)} />}
 
-      <WaveOverlay data={waveOverlay} onDone={() => setWaveOverlay(null)} />
-
       {/* Lives-lost red vignette flash */}
       {livesFlashId > 0 && (
         <div
@@ -328,6 +326,9 @@ export default function App() {
               sfxVolume={sfxVolume}
               floatingNumbers={floatingNumbers}
             />
+
+            {/* Wave start/complete banner — anchored to the map */}
+            <WaveOverlay data={waveOverlay} onDone={() => setWaveOverlay(null)} />
           </div>
         </div>
       </main>
